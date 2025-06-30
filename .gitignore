@@ -1,0 +1,6 @@
+# Streamlit secrets (keep this local only)
+.streamlit/secrets.toml
+
+# Environment files
+Scripts/email.env
+*.env
