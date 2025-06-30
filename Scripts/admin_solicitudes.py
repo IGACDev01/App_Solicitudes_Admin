@@ -21,34 +21,41 @@ ADMIN_CREDENTIALS = {
     "Viáticos": {"usuario": "admin_viaticos", "password": "viaticos2025"}
 }
 
-def safe_datetime_format(dt_value):
-    """Safely format datetime values"""
-    try:
-        if pd.isna(dt_value):
-            return "N/A"
-        
-        # Convert to datetime if needed
-        if isinstance(dt_value, str):
-            dt_value = pd.to_datetime(dt_value, errors='coerce')
-        
-        if pd.isna(dt_value):
-            return "N/A"
-            
-        # Remove timezone info if present
-        if hasattr(dt_value, 'tz_localize') and dt_value.tz is not None:
-            dt_value = dt_value.tz_localize(None)
-        elif hasattr(dt_value, 'tzinfo') and dt_value.tzinfo is not None:
-            dt_value = dt_value.replace(tzinfo=None)
-        
-        # Format to string
-        if hasattr(dt_value, 'strftime'):
-            return dt_value.strftime('%d/%m/%Y %H:%M')
-        else:
-            return str(dt_value)
-            
-    except Exception as e:
-        print(f"Error formatting datetime: {e}")
-        return "N/A"
+def agregar_comentario_admin(comentario_actual, nuevo_comentario, responsable):
+    """Add a new admin comment with timestamp and author"""
+    timestamp = datetime.now().strftime('%d/%m/%Y %H:%M')
+    nuevo_entry = f"[{timestamp} - {responsable}]: {nuevo_comentario}"
+    
+    if comentario_actual and comentario_actual.strip():
+        # Append to existing comments
+        return f"{comentario_actual}\n\n{nuevo_entry}"
+    else:
+        # First comment
+        return nuevo_entry
+
+def formatear_comentarios_admin_display(comentarios):
+    """Format admin comments for display in admin panel"""
+    if not comentarios or not comentarios.strip():
+        return "Sin comentarios previos"
+    
+    # Split by double newlines (comment separators)
+    comentarios_lista = comentarios.split('\n\n')
+    comentarios_html = []
+    
+    for comentario in comentarios_lista:
+        if comentario.strip():
+            # Parse timestamp and author if available
+            if comentario.startswith('[') and ']:' in comentario:
+                try:
+                    timestamp_autor = comentario.split(']:')[0] + ']'
+                    texto = comentario.split(']:')[1].strip()
+                    comentarios_html.append(f"**{timestamp_autor}**\n{texto}")
+                except:
+                    comentarios_html.append(comentario)
+            else:
+                comentarios_html.append(comentario)
+    
+    return '\n\n'.join(comentarios_html)
 
 def mostrar_tab_admin(data_manager):
     """Tab principal de administración - SharePoint optimized"""
@@ -67,7 +74,7 @@ def mostrar_tab_admin(data_manager):
         st.header(f"⚙️ Admin Panel - {proceso_admin}")
     with col2:
         if st.button("🔄 Refresh Data", key="refresh_admin"):
-            data_manager.load_data(force_reload=True)
+            st.cache_resource.clear()
             st.rerun()
     with col3:
         if st.button("🚪 Cerrar Sesión", key="logout_admin"):
@@ -76,7 +83,7 @@ def mostrar_tab_admin(data_manager):
             st.session_state.admin_usuario = None
             st.rerun()
     
-    # SharePoint status and data refresh
+    # Auto-refresh data
     data_manager.load_data()
     
     # SharePoint status indicator
@@ -169,7 +176,7 @@ def obtener_solicitudes_proceso(data_manager, proceso_admin):
     return pd.DataFrame()
 
 def mostrar_mini_dashboard(df, proceso):
-    """Mini dashboard del proceso - FIXED datetime handling"""
+    """Mini dashboard del proceso"""
     st.subheader(f"📊 Dashboard - {proceso}")
     
     # Métricas principales
@@ -191,26 +198,13 @@ def mostrar_mini_dashboard(df, proceso):
         completadas = len(df[df['estado'] == 'Completado'])
         st.metric("✅ Completadas", completadas)
     
-    # Alertas - FIXED datetime comparison
-    if pendientes > 0 and 'fecha_solicitud' in df.columns:
-        try:
-            fecha_limite = datetime.now() - timedelta(days=7)
-            
-            # Clean datetime column for comparison
-            df_temp = df.copy()
-            df_temp['fecha_solicitud_clean'] = pd.to_datetime(df_temp['fecha_solicitud'], errors='coerce')
-            if df_temp['fecha_solicitud_clean'].dt.tz is not None:
-                df_temp['fecha_solicitud_clean'] = df_temp['fecha_solicitud_clean'].dt.tz_localize(None)
-            
-            antiguas = df_temp[
-                (df_temp['estado'] == 'Pendiente') & 
-                (df_temp['fecha_solicitud_clean'] < fecha_limite)
-            ]
-            
-            if not antiguas.empty:
-                st.warning(f"⚠️ {len(antiguas)} solicitudes pendientes por más de 7 días")
-        except Exception as e:
-            print(f"Error checking old requests: {e}")
+    # Alertas
+    if pendientes > 0:
+        fecha_limite = datetime.now() - timedelta(days=7)
+        antiguas = df[(df['estado'] == 'Pendiente') & (df['fecha_solicitud'] < fecha_limite)]
+        
+        if not antiguas.empty:
+            st.warning(f"⚠️ {len(antiguas)} solicitudes pendientes por más de 7 días")
     
     # Gráfico de estados
     if total > 0:
@@ -297,26 +291,18 @@ def mostrar_lista_solicitudes_admin(data_manager, df, proceso):
     
     st.subheader("📋 Gestionar Solicitudes")
     
-    # Ordenar por prioridad y fecha - FIXED datetime sorting
+    # Ordenar por prioridad y fecha
     if 'prioridad' in df_filtrado.columns:
-        orden_prioridad = {'Alta': 0, 'Media': 1, 'Baja': 2, 'Sin asignar': 3}
-        df_filtrado['orden_prioridad'] = df_filtrado['prioridad'].map(orden_prioridad).fillna(3)
-        
-        # Clean fecha_solicitud for sorting
-        if 'fecha_solicitud' in df_filtrado.columns:
-            df_filtrado['fecha_solicitud_clean'] = pd.to_datetime(df_filtrado['fecha_solicitud'], errors='coerce')
-            if df_filtrado['fecha_solicitud_clean'].dt.tz is not None:
-                df_filtrado['fecha_solicitud_clean'] = df_filtrado['fecha_solicitud_clean'].dt.tz_localize(None)
-            df_filtrado = df_filtrado.sort_values(['orden_prioridad', 'fecha_solicitud_clean'])
-        else:
-            df_filtrado = df_filtrado.sort_values(['orden_prioridad'])
+        orden_prioridad = {'Alta': 0, 'Media': 1, 'Baja': 2}
+        df_filtrado['orden_prioridad'] = df_filtrado['prioridad'].map(orden_prioridad)
+        df_filtrado = df_filtrado.sort_values(['orden_prioridad', 'fecha_solicitud'])
     
     # Mostrar cada solicitud
     for idx, solicitud in df_filtrado.iterrows():
         mostrar_solicitud_admin(data_manager, solicitud, proceso)
 
 def mostrar_solicitud_admin(data_manager, solicitud, proceso):
-    """Mostrar una solicitud individual para administrar - SharePoint optimized with files"""
+    """Mostrar una solicitud individual para administrar - UPDATED with enhanced comments"""
     
     # Determinar color y emoji según estado y prioridad
     prioridad = solicitud.get('prioridad', 'Media')
@@ -333,7 +319,7 @@ def mostrar_solicitud_admin(data_manager, solicitud, proceso):
     
     # Título del expander
     titulo = f"{emoji} {solicitud['id_solicitud']} - {solicitud['nombre_solicitante']} ({estado})"
-    if prioridad != 'Media' and prioridad != 'Sin asignar':
+    if prioridad != 'Media':
         titulo += f" - {prioridad}"
     
     with st.expander(titulo):
@@ -351,67 +337,73 @@ def mostrar_solicitud_admin(data_manager, solicitud, proceso):
                 st.write(f"**Territorial:** {solicitud['territorial']}")
             
             if 'fecha_solicitud' in solicitud:
-                fecha_str = safe_datetime_format(solicitud['fecha_solicitud'])
+                fecha_str = solicitud['fecha_solicitud'].strftime('%d/%m/%Y %H:%M')
                 st.write(f"**Fecha:** {fecha_str}")
         
         with col2:
             st.write("**📝 Descripción**")
-            # Clean description for display
-            descripcion = solicitud.get('descripcion', 'Sin descripción disponible')
-            if descripcion and isinstance(descripcion, str):
-                import re
-                from html import unescape
-                descripcion_limpia = unescape(descripcion)
-                descripcion_limpia = re.sub(r'<[^>]+>', '', descripcion_limpia)
-                descripcion_limpia = re.sub(r'\s+', ' ', descripcion_limpia).strip()
-                if not descripcion_limpia or len(descripcion_limpia.strip()) < 3:
-                    descripcion_limpia = "Sin descripción disponible"
-            else:
-                descripcion_limpia = "Sin descripción disponible"
-            
             st.text_area(
                 "Descripción:",
-                value=descripcion_limpia,
+                value=solicitud.get('descripcion', ''),
                 height=100,
                 disabled=True,
                 key=f"desc_{solicitud['id_solicitud']}"
             )
         
-        # File management section - UPDATED for SharePoint
+        # ENHANCED: Display comment history
+        st.markdown("---")
+        comentarios_actuales = solicitud.get('comentarios_admin', '')
+        
+        if comentarios_actuales and comentarios_actuales.strip():
+            st.markdown("**💬 Historial de Comentarios Administrativos**")
+            
+            # Check if there are multiple timestamped comments
+            if '[' in comentarios_actuales and ']:' in comentarios_actuales:
+                comentarios_formateados = formatear_comentarios_admin_display(comentarios_actuales)
+                num_comentarios = len([c for c in comentarios_actuales.split('\n\n') if c.strip()])
+                
+                with st.expander(f"Ver {num_comentarios} comentario(s) previo(s)", expanded=False):
+                    st.markdown(comentarios_formateados)
+            else:
+                # Single old comment
+                st.info(f"**Comentario previo:** {comentarios_actuales}")
+        else:
+            st.markdown("**💬 Comentarios Administrativos**")
+            st.info("Sin comentarios previos")
+        
+        # File management section
         st.markdown("---")
         st.markdown("**📎 Archivos de la Solicitud**")
         
         col_files1, col_files2 = st.columns(2)
         
         with col_files1:
-            # Show existing files from SharePoint
+            # Show existing files
             existing_files = data_manager.get_request_attachments(solicitud['id_solicitud'])
             
             if existing_files:
                 st.write("📁 **Archivos existentes:**")
                 for file_info in existing_files:
-                    file_size_mb = file_info.get('size', 0) / (1024 * 1024)
+                    file_size_mb = file_info['size'] / (1024 * 1024)
                     col_file1, col_file2 = st.columns([3, 1])
                     with col_file1:
                         st.write(f"• {file_info['name']} ({file_size_mb:.1f}MB)")
                     with col_file2:
                         if st.button("💾", key=f"download_{file_info['id']}", help="Descargar archivo"):
-                            # Download link for SharePoint files
-                            download_url = file_info.get('download_url', '')
-                            if download_url:
-                                st.markdown(f"[⬇️ Descargar]({download_url})", unsafe_allow_html=True)
+                            if file_info.get('download_url'):
+                                st.markdown(f"[⬇️ Descargar]({file_info['download_url']})")
                             else:
-                                st.error("URL de descarga no disponible")
+                                st.info("URL de descarga no disponible")
             else:
                 st.info("📁 No hay archivos adjuntos")
         
         with col_files2:
             st.write("📤 **Subir nuevos archivos**")
-            st.caption("Los archivos se guardarán en la carpeta de la solicitud")
+            st.caption("Use el formulario de abajo para subir archivos")
         
         st.markdown("---")
         
-        # Formulario de gestión - SharePoint optimized with file upload
+        # Formulario de gestión - UPDATED with enhanced comment handling
         with st.form(f"manage_{solicitud['id_solicitud']}"):
             col1, col2, col3 = st.columns(3)
             
@@ -450,21 +442,22 @@ def mostrar_solicitud_admin(data_manager, solicitud, proceso):
                 )
             
             with col3:
-                # Comentarios
-                comentarios = st.text_area(
-                    "Comentarios:",
-                    placeholder="Comentarios sobre la actualización...",
+                # ENHANCED: Nuevo comentario (será agregado al historial)
+                nuevo_comentario = st.text_area(
+                    "Agregar nuevo comentario:",
+                    placeholder="Escriba aquí el nuevo comentario que será agregado al historial...",
                     height=100,
-                    key=f"comentarios_{solicitud['id_solicitud']}"
+                    key=f"comentarios_{solicitud['id_solicitud']}",
+                    help="Este comentario se agregará al historial con fecha y hora automáticas"
                 )
             
-            # File upload section in form - UPDATED to match registro form
+            # File upload section in form
             st.markdown("**📎 Subir Archivos Adicionales**")
             new_files = st.file_uploader(
                 "Seleccionar archivos para subir:",
                 accept_multiple_files=True,
                 type=['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'jpg', 'jpeg', 'png', 'zip'],
-                help="Formatos permitidos: PDF, Word, Excel, imágenes, texto, ZIP. Máximo 10MB por archivo. Se guardarán en la carpeta de la solicitud.",
+                help="Máximo 10MB por archivo. Se guardarán como attachments en SharePoint.",
                 key=f"admin_files_{solicitud['id_solicitud']}"
             )
             
@@ -473,7 +466,7 @@ def mostrar_solicitud_admin(data_manager, solicitud, proceso):
                 for file in new_files:
                     file_size_mb = file.size / (1024 * 1024)
                     if file_size_mb > 10:
-                        st.error(f"❌ {file.name} es muy grande ({file_size_mb:.1f}MB). Máximo 10MB.")
+                        st.error(f"❌ {file.name} es muy grande ({file_size_mb:.1f}MB)")
                     else:
                         st.success(f"✅ {file.name} ({file_size_mb:.1f}MB)")
             
@@ -502,70 +495,77 @@ def mostrar_solicitud_admin(data_manager, solicitud, proceso):
             
             # Procesar actualización
             if actualizar:
-                procesar_actualizacion_sharepoint(
+                procesar_actualizacion_sharepoint_enhanced(
                     data_manager, solicitud, nuevo_estado, nueva_prioridad, 
-                    responsable, email_responsable, comentarios,
+                    responsable, email_responsable, nuevo_comentario,
                     notificar_solicitante, notificar_responsable, new_files
                 )
 
-def procesar_actualizacion_sharepoint(data_manager, solicitud, nuevo_estado, nueva_prioridad, 
-                                    responsable, email_responsable, comentarios,
-                                    notificar_solicitante, notificar_responsable, new_files=None):
-    """Procesar la actualización de una solicitud - SharePoint optimized with file upload and email attachment"""
+def procesar_actualizacion_sharepoint_enhanced(data_manager, solicitud, nuevo_estado, nueva_prioridad, 
+                                             responsable, email_responsable, nuevo_comentario,
+                                             notificar_solicitante, notificar_responsable, new_files=None):
+    """Procesar la actualización de una solicitud - ENHANCED with comment history"""
     
     try:
         with st.spinner("Actualizando en SharePoint..."):
-            # Upload new files first if any
-            files_uploaded = []
-            attachment_data = None
-            attachment_name = None
+            # Get current admin comments
+            comentarios_actuales = solicitud.get('comentarios_admin', '')
             
-            if new_files:
-                with st.spinner(f"Subiendo {len(new_files)} archivo(s)..."):
-                    for uploaded_file in new_files:
-                        if uploaded_file.size <= 10 * 1024 * 1024:  # 10MB limit
-                            try:
+            # Add new comment if provided
+            if nuevo_comentario and nuevo_comentario.strip():
+                autor = responsable or st.session_state.get('admin_usuario', 'Admin')
+                comentarios_finales = agregar_comentario_admin(
+                    comentarios_actuales, 
+                    nuevo_comentario.strip(), 
+                    autor
+                )
+                st.info(f"💬 Se agregará nuevo comentario al historial")
+            else:
+                comentarios_finales = comentarios_actuales
+                if nuevo_estado != solicitud['estado'] and not nuevo_comentario:
+                    # Add automatic system comment for status changes
+                    autor = st.session_state.get('admin_usuario', 'Admin')
+                    comentario_automatico = f"Estado cambiado de '{solicitud['estado']}' a '{nuevo_estado}'"
+                    comentarios_finales = agregar_comentario_admin(
+                        comentarios_actuales, 
+                        comentario_automatico, 
+                        f"{autor} (Sistema)"
+                    )
+            
+            # Update priority if changed
+            if nueva_prioridad != solicitud.get('prioridad', 'Media'):
+                success_priority = data_manager.update_request_priority(solicitud['id_solicitud'], nueva_prioridad)
+                if not success_priority:
+                    st.error("❌ Error al actualizar prioridad")
+                    return
+            
+            # Update status and comments
+            success_status = data_manager.update_request_status(
+                solicitud['id_solicitud'],
+                nuevo_estado,
+                responsable,
+                comentarios_finales  # Use the enhanced comments
+            )
+            
+            if success_status:
+                # Handle file uploads
+                files_uploaded = []
+                if new_files:
+                    with st.spinner(f"Subiendo {len(new_files)} archivo(s)..."):
+                        for uploaded_file in new_files:
+                            if uploaded_file.size <= 10 * 1024 * 1024:  # 10MB limit
                                 file_data = uploaded_file.read()
-                                
-                                # Upload to SharePoint using the same method as registro
                                 success = data_manager.upload_attachment_to_item(
                                     solicitud['id_solicitud'], file_data, uploaded_file.name
                                 )
                                 
                                 if success:
                                     files_uploaded.append(uploaded_file.name)
-                                    st.success(f"📎 {uploaded_file.name} subido exitosamente")
-                                    
-                                    # Keep first file for email attachment
-                                    if attachment_data is None:
-                                        attachment_data = file_data
-                                        attachment_name = uploaded_file.name
-                                else:
-                                    st.warning(f"⚠️ No se pudo subir {uploaded_file.name}")
-                                    
-                            except Exception as file_error:
-                                st.warning(f"⚠️ Error subiendo {uploaded_file.name}: {file_error}")
-            
-            # Update priority if changed
-            if nueva_prioridad != solicitud.get('prioridad', 'Media'):
-                # Update priority in SharePoint using the data manager method
-                success_priority = data_manager.update_request_priority(solicitud['id_solicitud'], nueva_prioridad)
-                if not success_priority:
-                    st.warning("⚠️ No se pudo actualizar la prioridad")
-            
-            # Update status and other fields
-            success_status = data_manager.update_request_status(
-                solicitud['id_solicitud'],
-                nuevo_estado,
-                responsable,
-                comentarios
-            )
-            
-            if success_status:
-                st.success("✅ Solicitud actualizada en SharePoint")
                 
-                # Force data refresh
+                # Reload data to reflect changes
                 data_manager.load_data(force_reload=True)
+                
+                st.success("✅ Solicitud actualizada con comentario registrado en el historial")
                 
                 # Send notifications
                 if notificar_solicitante:
@@ -580,29 +580,17 @@ def procesar_actualizacion_sharepoint(data_manager, solicitud, nuevo_estado, nue
                             'proceso': solicitud.get('proceso', 'N/A')
                         }
                         
-                        # Include file information in comments
-                        comentarios_con_files = comentarios
+                        # Send only the new comment to user, not all comment history
+                        comentario_para_usuario = nuevo_comentario.strip() if nuevo_comentario and nuevo_comentario.strip() else f"Estado actualizado a: {nuevo_estado}"
                         if files_uploaded:
-                            comentarios_con_files += f"\n\nArchivos adjuntos: {', '.join(files_uploaded)}"
+                            comentario_para_usuario += f"\n\nArchivos adjuntos: {', '.join(files_uploaded)}"
                         
-                        # Send email with attachment if available
-                        if attachment_data and attachment_name:
-                            email_sent = email_manager.send_status_update_with_attachment(
-                                solicitud_data, nuevo_estado, comentarios_con_files,
-                                attachment_data, attachment_name
-                            )
-                        else:
-                            email_sent = email_manager.send_status_update_notification(
-                                solicitud_data, nuevo_estado, comentarios_con_files
-                            )
+                        email_sent = email_manager.send_status_update_notification(
+                            solicitud_data, nuevo_estado, comentario_para_usuario
+                        )
                         
                         if email_sent:
                             st.success("📧 Notificación enviada al solicitante")
-                            if attachment_name:
-                                st.success(f"📎 Archivo {attachment_name} adjuntado al email")
-                        else:
-                            st.info("📧 Notificación simulada (modo demo)")
-                            
                     except Exception as e:
                         st.warning(f"⚠️ Error enviando notificación: {e}")
                 
@@ -612,40 +600,15 @@ def procesar_actualizacion_sharepoint(data_manager, solicitud, nuevo_estado, nue
                 if files_uploaded:
                     st.success(f"📎 {len(files_uploaded)} archivo(s) subidos exitosamente")
                 
-                # Show success summary
-                st.markdown("---")
-                st.markdown("### ✅ Actualización Completada")
+                # Clear cache to force refresh
+                st.cache_resource.clear()
                 
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.info(f"🆔 **ID:** {solicitud['id_solicitud']}")
-                    st.info(f"📊 **Nuevo Estado:** {nuevo_estado}")
-                    if nueva_prioridad != solicitud.get('prioridad', 'Media'):
-                        st.info(f"🔹 **Nueva Prioridad:** {nueva_prioridad}")
-                
-                with col2:
-                    if files_uploaded:
-                        st.info(f"📎 **Archivos subidos:** {len(files_uploaded)}")
-                        for filename in files_uploaded[:3]:  # Show first 3
-                            st.write(f"• {filename}")
-                        if len(files_uploaded) > 3:
-                            st.write(f"• ... y {len(files_uploaded) - 3} más")
-                    
-                    if comentarios:
-                        st.info(f"💬 **Comentarios:** {comentarios[:50]}...")
-                
-                # Auto-refresh after 3 seconds
-                time.sleep(3)
+                # Auto-refresh after 2 seconds
+                time.sleep(2)
                 st.rerun()
-                
+                    
             else:
-                st.error("❌ Error al actualizar la solicitud en SharePoint")
+                st.error("❌ Error al actualizar la solicitud")
                 
     except Exception as e:
         st.error(f"❌ Error al procesar actualización: {str(e)}")
-        print(f"Error in procesar_actualizacion_sharepoint: {e}")
-
-def update_request_priority_sharepoint(data_manager, id_solicitud, nueva_prioridad):
-    """Update request priority in SharePoint """
-    # This function is now deprecated as the functionality has been moved to the SharePointListManager
-    return data_manager.update_request_priority(id_solicitud, nueva_prioridad)
