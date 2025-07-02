@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 from email_manager import EmailManager
-import plotly.express as px
 import plotly.graph_objects as go
 import time
 
