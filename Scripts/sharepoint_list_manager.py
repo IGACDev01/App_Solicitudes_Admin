@@ -186,7 +186,7 @@ class SharePointListManager:
             return None
 
     def _get_target_drive_id(self) -> Optional[str]:
-        """Get the Sistema_Gestion_Solicitudes drive ID - SIMPLIFIED from test"""
+        """Get the Sistema_Gestion_Solicitudes drive ID"""
         if hasattr(self, '_cached_target_drive_id'):
             return self._cached_target_drive_id
             
@@ -340,18 +340,13 @@ class SharePointListManager:
             self.df = self.create_empty_dataframe()
     
     def _parse_date(self, date_str: str) -> Optional[datetime]:
-<<<<<<< Updated upstream
         """Parse SharePoint date string to datetime"""
-=======
-        """Parse SharePoint date string to timezone-naive datetime"""
->>>>>>> Stashed changes
         if not date_str:
             return None
         
         try:
             # SharePoint returns ISO format: 2023-12-01T10:30:00Z
             if 'T' in date_str:
-<<<<<<< Updated upstream
                 return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
             else:
                 return datetime.fromisoformat(date_str)
@@ -359,20 +354,6 @@ class SharePointListManager:
             print(f"Error parsing date '{date_str}': {e}")
             return None
     
-=======
-                # Remove timezone info to make it naive
-                dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                # Convert to naive datetime (remove timezone)
-                return dt.replace(tzinfo=None)
-            else:
-                dt = datetime.fromisoformat(date_str)
-                # Ensure it's naive
-                return dt.replace(tzinfo=None) if dt.tzinfo else dt
-        except Exception as e:
-            print(f"Error parsing date '{date_str}': {e}")
-            return None
-        
->>>>>>> Stashed changes
     def add_request(self, datos_solicitud: Dict[str, Any]) -> Optional[str]:
         """Add new request to SharePoint List"""
         try:
@@ -429,41 +410,22 @@ class SharePointListManager:
         except Exception as e:
             print(f"Error adding request to SharePoint list: {e}")
             return None
-<<<<<<< Updated upstream
     
     def update_request_status(self, id_solicitud: str, nuevo_estado: str, 
                             responsable: str = "", comentarios: str = "") -> bool:
-        """Update request status in SharePoint List"""
-=======
-
-    def update_request_status(self, id_solicitud: str, nuevo_estado: str, 
-                            responsable: str = "", comentarios: str = "") -> bool:
-        """Update request status in SharePoint List - TIMEZONE SAFE VERSION"""
->>>>>>> Stashed changes
+        """Update request status in SharePoint List - ENHANCED with comment support"""
         try:
             # Find the SharePoint item
             sharepoint_id = self._get_sharepoint_item_id(id_solicitud)
             if not sharepoint_id:
-<<<<<<< Updated upstream
-=======
                 print(f"SharePoint item not found for ID: {id_solicitud}")
->>>>>>> Stashed changes
                 return False
             
             headers = self._get_headers()
             if not headers.get('Authorization'):
-<<<<<<< Updated upstream
                 return False
             
             current_time = datetime.now().isoformat() + 'Z'
-=======
-                print("No authorization headers available")
-                return False
-            
-            # Use timezone-naive datetime
-            current_time_naive = datetime.now()
-            current_time = current_time_naive.isoformat() + 'Z'
->>>>>>> Stashed changes
             
             # Prepare update data
             update_data = {
@@ -477,7 +439,6 @@ class SharePointListManager:
             if comentarios:
                 update_data['ComentariosAdmin'] = comentarios
             
-<<<<<<< Updated upstream
             # Handle completion
             if nuevo_estado == 'Completado':
                 update_data['FechaCompletado'] = current_time
@@ -491,34 +452,15 @@ class SharePointListManager:
                         update_data['TiempoResolucionDias'] = round(tiempo_resolucion, 2)
             
             # Calculate response time if this is the first update
-=======
-            # Handle completion - TIMEZONE SAFE
-            if nuevo_estado == 'Completado':
-                update_data['FechaCompletado'] = current_time
-                
-                # Calculate resolution time safely
-                original_item = self.get_request_by_id(id_solicitud)
-                if not original_item.empty:
-                    fecha_solicitud = original_item.iloc[0]['fecha_solicitud']
-                    tiempo_resolucion = self.safe_datetime_subtract(current_time_naive, fecha_solicitud)
-                    update_data['TiempoResolucionDias'] = tiempo_resolucion
-            
-            # Calculate response time if this is the first update - TIMEZONE SAFE
->>>>>>> Stashed changes
             if nuevo_estado != 'Pendiente':
                 original_item = self.get_request_by_id(id_solicitud)
                 if not original_item.empty:
                     current_response_time = original_item.iloc[0].get('tiempo_respuesta_dias', 0)
                     if current_response_time == 0:
                         fecha_solicitud = original_item.iloc[0]['fecha_solicitud']
-<<<<<<< Updated upstream
                         if pd.notna(fecha_solicitud):
                             tiempo_respuesta = (datetime.now() - fecha_solicitud).total_seconds() / (24 * 3600)
                             update_data['TiempoRespuestaDias'] = round(tiempo_respuesta, 2)
-=======
-                        tiempo_respuesta = self.safe_datetime_subtract(current_time_naive, fecha_solicitud)
-                        update_data['TiempoRespuestaDias'] = tiempo_respuesta
->>>>>>> Stashed changes
             
             # Update SharePoint list item
             update_url = f"{self.graph_config['graph_url']}/sites/{self.sharepoint_site_id}/lists/{self.list_id}/items/{sharepoint_id}/fields"
@@ -529,25 +471,50 @@ class SharePointListManager:
                 print(f"Request {id_solicitud} updated successfully")
                 return True
             else:
-<<<<<<< Updated upstream
                 print(f"Failed to update request: {response.status_code}")
-=======
-                error_text = response.text
-                print(f"Failed to update request: {response.status_code} - {error_text}")
->>>>>>> Stashed changes
                 return False
                 
         except Exception as e:
             print(f"Error updating request status: {e}")
-<<<<<<< Updated upstream
             return False
     
-=======
-            import traceback
-            traceback.print_exc()
+    def update_request_priority(self, id_solicitud: str, nueva_prioridad: str) -> bool:
+        """Update request priority in SharePoint List"""
+        try:
+            # Find the SharePoint item
+            sharepoint_id = self._get_sharepoint_item_id(id_solicitud)
+            if not sharepoint_id:
+                print(f"SharePoint item not found for ID: {id_solicitud}")
+                return False
+            
+            headers = self._get_headers()
+            if not headers.get('Authorization'):
+                return False
+            
+            current_time = datetime.now().isoformat() + 'Z'
+            
+            # Prepare update data
+            update_data = {
+                'Prioridad': nueva_prioridad,
+                'FechaActualizacion': current_time
+            }
+            
+            # Update SharePoint list item
+            update_url = f"{self.graph_config['graph_url']}/sites/{self.sharepoint_site_id}/lists/{self.list_id}/items/{sharepoint_id}/fields"
+            
+            response = requests.patch(update_url, headers=headers, json=update_data)
+            
+            if response.status_code in [200, 204]:
+                print(f"Request {id_solicitud} priority updated to {nueva_prioridad}")
+                return True
+            else:
+                print(f"Failed to update priority: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            print(f"Error updating request priority: {e}")
             return False
-
->>>>>>> Stashed changes
+    
     def _get_sharepoint_item_id(self, id_solicitud: str) -> Optional[str]:
         """Get SharePoint internal item ID from custom ID"""
         if self.df is None or self.df.empty:
@@ -559,15 +526,12 @@ class SharePointListManager:
         
         return matching_items.iloc[0].get('sharepoint_id')
     
-<<<<<<< Updated upstream
     # ============================================
-    # FILE UPLOAD METHODS - UPDATED FROM TEST
+    # FILE UPLOAD METHODS
     # ============================================
     
-=======
->>>>>>> Stashed changes
     def upload_attachment_to_item(self, id_solicitud: str, file_data: bytes, file_name: str) -> bool:
-        """Upload file attachment for a specific request - SIMPLIFIED"""
+        """Upload file attachment for a specific request"""
         try:
             headers = self._get_headers()
             if not headers.get('Authorization'):
@@ -742,6 +706,12 @@ class SharePointListManager:
             print(f"Error validating request existence: {e}")
             return False
     
+    def save_data(self) -> bool:
+        """Save data - for SharePoint this is handled automatically by API calls"""
+        # SharePoint automatically saves data via API calls
+        # This method exists for compatibility with other data managers
+        return True
+    
     def get_requests_summary(self) -> Dict[str, Any]:
         """Get requests summary for dashboard"""
         if self.df is None or self.df.empty:
@@ -779,26 +749,9 @@ class SharePointListManager:
             por_territorial = self.df['territorial'].value_counts().to_dict()
             
             # Monthly distribution
-<<<<<<< Updated upstream
             self.df['mes_solicitud'] = self.df['fecha_solicitud'].dt.to_period('M')
             por_mes = self.df['mes_solicitud'].value_counts().sort_index().to_dict()
             por_mes = {str(k): v for k, v in por_mes.items()}
-=======
-            # Clean timezone info before creating periods to avoid warning
-            df_temp = self.df.copy()
-            df_temp['fecha_solicitud_clean'] = pd.to_datetime(df_temp['fecha_solicitud'], errors='coerce')
-
-            # Remove timezone info to prevent the warning
-            if df_temp['fecha_solicitud_clean'].dt.tz is not None:
-                df_temp['fecha_solicitud_clean'] = df_temp['fecha_solicitud_clean'].dt.tz_localize(None)
-
-            # Now create periods without timezone warnings
-            df_temp['mes_solicitud'] = df_temp['fecha_solicitud_clean'].dt.to_period('M')
-
-            # Continue with the rest of your logic using df_temp instead of self.df for monthly analysis
-            por_mes = df_temp['mes_solicitud'].value_counts().sort_index().to_dict()
-            por_mes = {str(k): v for k, v in por_mes.items() if pd.notna(k)}
->>>>>>> Stashed changes
             
             return {
                 'total_solicitudes': total,
@@ -827,196 +780,4 @@ class SharePointListManager:
             'token_available': bool(self._get_access_token()),
             'site_url': self.graph_config.get('sharepoint_site_url'),
             'target_drive_connected': bool(self.target_drive_id)
-<<<<<<< Updated upstream
         }
-=======
-        }
-    
-####################################### Admin end additions ############################################
-
-    def update_request_priority(self, id_solicitud: str, nueva_prioridad: str) -> bool:
-        """Update request priority in SharePoint List"""
-        try:
-            # Find the SharePoint item
-            sharepoint_id = self._get_sharepoint_item_id(id_solicitud)
-            if not sharepoint_id:
-                print(f"SharePoint item not found for ID: {id_solicitud}")
-                return False
-            
-            headers = self._get_headers()
-            if not headers.get('Authorization'):
-                print("No authorization headers available")
-                return False
-            
-            # Prepare update data
-            update_data = {
-                'Prioridad': nueva_prioridad
-            }
-            
-            # Update SharePoint list item
-            update_url = f"{self.graph_config['graph_url']}/sites/{self.sharepoint_site_id}/lists/{self.list_id}/items/{sharepoint_id}/fields"
-            
-            response = requests.patch(update_url, headers=headers, json=update_data)
-            
-            if response.status_code in [200, 204]:
-                print(f"Priority updated for request {id_solicitud}: {nueva_prioridad}")
-                return True
-            else:
-                error_text = response.text
-                print(f"Failed to update priority: {response.status_code} - {error_text}")
-                return False
-                
-        except Exception as e:
-            print(f"Error updating priority: {e}")
-            return False
-    
-    def _ensure_datetime_timezone_naive(self, dt_obj):
-        """Ensure datetime object is timezone-naive for consistent operations"""
-        if dt_obj is None:
-            return None
-        
-        try:
-            # Convert to pandas datetime if string
-            if isinstance(dt_obj, str):
-                dt_obj = pd.to_datetime(dt_obj, errors='coerce')
-            
-            if pd.isna(dt_obj):
-                return None
-            
-            # Remove timezone info if present
-            if hasattr(dt_obj, 'tz_localize') and dt_obj.tz is not None:
-                dt_obj = dt_obj.tz_localize(None)
-            elif hasattr(dt_obj, 'tzinfo') and dt_obj.tzinfo is not None:
-                dt_obj = dt_obj.replace(tzinfo=None)
-            
-            # Convert to datetime if pandas Timestamp
-            if hasattr(dt_obj, 'to_pydatetime'):
-                dt_obj = dt_obj.to_pydatetime()
-            
-            return dt_obj
-            
-        except Exception as e:
-            print(f"Error processing datetime: {e}")
-            return None
-
-    def get_requests_summary(self) -> Dict[str, Any]:
-        """Get requests summary for dashboard - FIXED datetime and timezone warnings"""
-        if self.df is None or self.df.empty:
-            return {
-                'total_solicitudes': 0,
-                'solicitudes_activas': 0,
-                'solicitudes_completadas': 0,
-                'tiempo_promedio_respuesta': 0,
-                'tiempo_promedio_resolucion': 0,
-                'solicitudes_por_estado': {},
-                'solicitudes_por_tipo': {},
-                'solicitudes_por_area': {},
-                'solicitudes_por_proceso': {},
-                'solicitudes_por_territorial': {},
-                'solicitudes_por_mes': {}
-            }
-        
-        try:
-            total = len(self.df)
-            activas = len(self.df[self.df['estado'] != 'Completado'])
-            completadas = len(self.df[self.df['estado'] == 'Completado'])
-            
-            # Calculate averages
-            solicitudes_con_respuesta = self.df[self.df['tiempo_respuesta_dias'] > 0]
-            tiempo_promedio_respuesta = solicitudes_con_respuesta['tiempo_respuesta_dias'].mean() if not solicitudes_con_respuesta.empty else 0
-            
-            solicitudes_completadas = self.df[self.df['estado'] == 'Completado']
-            tiempo_promedio_resolucion = solicitudes_completadas['tiempo_resolucion_dias'].mean() if not solicitudes_completadas.empty else 0
-            
-            # Generate distributions
-            por_estado = self.df['estado'].value_counts().to_dict()
-            por_tipo = self.df['tipo_solicitud'].value_counts().to_dict()
-            por_area = self.df['area'].value_counts().to_dict() if 'area' in self.df.columns else {}
-            por_proceso = self.df['proceso'].value_counts().to_dict() if 'proceso' in self.df.columns else {}
-            por_territorial = self.df['territorial'].value_counts().to_dict() if 'territorial' in self.df.columns else {}
-            
-            # Monthly distribution - FIXED to avoid timezone warning
-            por_mes = {}
-            if 'fecha_solicitud' in self.df.columns:
-                try:
-                    # Clean datetime column first
-                    fecha_clean = pd.to_datetime(self.df['fecha_solicitud'], errors='coerce')
-                    if fecha_clean.dt.tz is not None:
-                        fecha_clean = fecha_clean.dt.tz_localize(None)
-                    
-                    # Now create periods safely
-                    mes_solicitud = fecha_clean.dt.to_period('M')
-                    por_mes_series = mes_solicitud.value_counts().sort_index()
-                    por_mes = {str(k): v for k, v in por_mes_series.items() if pd.notna(k)}
-                except Exception as e:
-                    print(f"Error processing monthly data: {e}")
-                    por_mes = {}
-            
-            return {
-                'total_solicitudes': total,
-                'solicitudes_activas': activas,
-                'solicitudes_completadas': completadas,
-                'tiempo_promedio_respuesta': round(float(tiempo_promedio_respuesta) if not pd.isna(tiempo_promedio_respuesta) else 0, 2),
-                'tiempo_promedio_resolucion': round(float(tiempo_promedio_resolucion) if not pd.isna(tiempo_promedio_resolucion) else 0, 2),
-                'solicitudes_por_estado': por_estado,
-                'solicitudes_por_tipo': por_tipo,
-                'solicitudes_por_area': por_area,
-                'solicitudes_por_proceso': por_proceso,
-                'solicitudes_por_territorial': por_territorial,
-                'solicitudes_por_mes': por_mes
-            }
-        except Exception as e:
-            print(f"Error generating summary: {e}")
-            return {
-                'total_solicitudes': 0,
-                'solicitudes_activas': 0,
-                'solicitudes_completadas': 0,
-                'tiempo_promedio_respuesta': 0,
-                'tiempo_promedio_resolucion': 0,
-                'solicitudes_por_estado': {},
-                'solicitudes_por_tipo': {},
-                'solicitudes_por_area': {},
-                'solicitudes_por_proceso': {},
-                'solicitudes_por_territorial': {},
-                'solicitudes_por_mes': {}
-            }
-      
-    def safe_datetime_subtract(self, end_time, start_time):
-        """Safely subtract datetime objects handling timezone issues"""
-        try:
-            # Ensure end_time is naive datetime
-            if hasattr(end_time, 'tzinfo') and end_time.tzinfo is not None:
-                end_time = end_time.replace(tzinfo=None)
-            elif hasattr(end_time, 'tz') and end_time.tz is not None:
-                end_time = end_time.tz_localize(None)
-            
-            # Handle start_time (from database)
-            if pd.isna(start_time):
-                return 0
-                
-            # Convert string to datetime if needed
-            if isinstance(start_time, str):
-                start_time = pd.to_datetime(start_time, errors='coerce')
-                if pd.isna(start_time):
-                    return 0
-            
-            # Remove timezone from start_time
-            if hasattr(start_time, 'tz') and start_time.tz is not None:
-                start_time = start_time.tz_localize(None)
-            elif hasattr(start_time, 'tzinfo') and start_time.tzinfo is not None:
-                start_time = start_time.replace(tzinfo=None)
-            
-            # Convert pandas timestamp to datetime if needed
-            if hasattr(start_time, 'to_pydatetime'):
-                start_time = start_time.to_pydatetime()
-            if hasattr(end_time, 'to_pydatetime'):
-                end_time = end_time.to_pydatetime()
-            
-            # Now both should be naive - calculate difference
-            time_diff = (end_time - start_time).total_seconds() / (24 * 3600)
-            return round(time_diff, 2)
-            
-        except Exception as e:
-            print(f"Error in datetime subtraction: {e}")
-            return 0
->>>>>>> Stashed changes

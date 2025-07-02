@@ -5,6 +5,8 @@ from typing import Dict, Any, Optional
 import os
 from dotenv import load_dotenv
 
+APP_URL = "https://appsolicitudes-h72izekvzacukoykxwnfqb.streamlit.app/"
+
 class EmailManager:
     def __init__(self):
         # Load environment variables
@@ -436,7 +438,7 @@ class EmailManager:
         """
     
     def get_confirmation_template(self, datos: Dict[str, Any], id_solicitud: str) -> str:
-        """HTML template for confirmation to requester"""
+        """HTML template for confirmation to requester - UPDATED with app link"""
         return f"""
         <!DOCTYPE html>
         <html>
@@ -451,6 +453,7 @@ class EmailManager:
                 .highlight-box {{ background: #e8f5e8; padding: 15px; margin: 10px 0; border-radius: 5px; text-align: center; }}
                 .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
                 .id-code {{ font-size: 18px; font-weight: bold; color: #0066cc; font-family: monospace; }}
+                .app-link {{ background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0; }}
             </style>
         </head>
         <body>
@@ -489,6 +492,13 @@ class EmailManager:
                             <li>Puede consultar el estado usando el ID: <strong>{id_solicitud}</strong></li>
                         </ul>
                     </div>
+                    
+                    <div class="info-box" style="text-align: center;">
+                        <h3>🔍 Seguimiento de su Solicitud</h3>
+                        <p>Para más información y seguimiento en tiempo real, visite:</p>
+                        <a href="{APP_URL}" class="app-link">📱 App de Seguimiento de Solicitudes</a>
+                        <p><small>Use su ID de solicitud: <strong>{id_solicitud}</strong> para hacer seguimiento</small></p>
+                    </div>
                 </div>
                 <div class="footer">
                     <p>Sistema de Gestión de Solicitudes - IGAC</p>
@@ -498,15 +508,94 @@ class EmailManager:
         </body>
         </html>
         """
-    
+
     def get_status_update_template(self, datos: Dict[str, Any], nuevo_estado: str, comentarios: str) -> str:
-        """HTML template for status update notification"""
+            """HTML template for status update notification - UPDATED with app link"""
+            estado_emoji = {
+                "Pendiente": "🟡",
+                "En Proceso": "🔵", 
+                "Completado": "✅",
+                "Cancelado": "❌"
+            }
+            
+            return f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .header {{ background: #17becf; color: white; padding: 20px; text-align: center; }}
+                    .content {{ background: #f9f9f9; padding: 20px; border: 1px solid #ddd; }}
+                    .info-box {{ background: white; padding: 15px; margin: 10px 0; border-left: 4px solid #17becf; }}
+                    .status-box {{ background: #e8f5e8; padding: 15px; margin: 10px 0; border-radius: 5px; }}
+                    .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
+                    .app-link {{ background: #007bff; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 10px 0; font-size: 14px; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>🔄 Actualización de Solicitud - IGAC</h1>
+                    </div>
+                    <div class="content">
+                        <div class="info-box">
+                            <h3>📋 Información de la Solicitud</h3>
+                            <p><strong>ID:</strong> {datos['id_solicitud']}</p>
+                            <p><strong>Área:</strong> {datos.get('area', 'N/A')}</p>
+                            <p><strong>Proceso:</strong> {datos.get('proceso', 'N/A')}</p>
+                            <p><strong>Tipo:</strong> {datos['tipo_solicitud']}</p>
+                            <p><strong>Fecha de Solicitud:</strong> {datos['fecha_solicitud'].strftime('%d/%m/%Y') if 'fecha_solicitud' in datos else 'N/A'}</p>
+                        </div>
+                        
+                        <div class="status-box">
+                            <h3>🎯 Nuevo Estado</h3>
+                            <h2>{estado_emoji.get(nuevo_estado, '🔹')} {nuevo_estado}</h2>
+                            <p><strong>Actualizado:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+                        </div>
+                        
+                        {f'''
+                        <div class="info-box">
+                            <h3>💬 Comentarios</h3>
+                            <p>{comentarios}</p>
+                        </div>
+                        ''' if comentarios else ''}
+                        
+                        <div class="info-box" style="text-align: center;">
+                            <h3>🔍 Ver Detalles Completos</h3>
+                            <p>Para más información y seguimiento detallado:</p>
+                            <a href="{APP_URL}" class="app-link">📱 App de Seguimiento</a>
+                            <p><small>Use su ID: <strong>{datos['id_solicitud']}</strong></small></p>
+                        </div>
+                    </div>
+                    <div class="footer">
+                        <p>Sistema de Gestión de Solicitudes - IGAC</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+
+    def get_status_update_template_with_attachment(self, datos: Dict[str, Any], nuevo_estado: str, 
+                                                comentarios: str, attachment_name: str = None) -> str:
+        """HTML template for status update notification with attachment - UPDATED with app link"""
         estado_emoji = {
             "Pendiente": "🟡",
             "En Proceso": "🔵", 
             "Completado": "✅",
             "Cancelado": "❌"
         }
+        
+        attachment_section = ""
+        if attachment_name:
+            attachment_section = f"""
+            <div class="info-box">
+                <h3>📎 Archivo Adjunto</h3>
+                <p>Se ha adjuntado el archivo: <strong>{attachment_name}</strong></p>
+                <p>Este archivo contiene información adicional relacionada con su solicitud.</p>
+            </div>
+            """
         
         return f"""
         <!DOCTYPE html>
@@ -521,6 +610,7 @@ class EmailManager:
                 .info-box {{ background: white; padding: 15px; margin: 10px 0; border-left: 4px solid #17becf; }}
                 .status-box {{ background: #e8f5e8; padding: 15px; margin: 10px 0; border-radius: 5px; }}
                 .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
+                .app-link {{ background: #007bff; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 10px 0; font-size: 14px; }}
             </style>
         </head>
         <body>
@@ -550,6 +640,15 @@ class EmailManager:
                         <p>{comentarios}</p>
                     </div>
                     ''' if comentarios else ''}
+                    
+                    {attachment_section}
+                    
+                    <div class="info-box" style="text-align: center;">
+                        <h3>🔍 Ver Detalles Completos</h3>
+                        <p>Para más información y seguimiento detallado:</p>
+                        <a href="{APP_URL}" class="app-link">📱 App de Seguimiento</a>
+                        <p><small>Use su ID: <strong>{datos['id_solicitud']}</strong></small></p>
+                    </div>
                 </div>
                 <div class="footer">
                     <p>Sistema de Gestión de Solicitudes - IGAC</p>

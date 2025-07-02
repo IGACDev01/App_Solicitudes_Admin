@@ -39,6 +39,31 @@ st.markdown("""
         border-left: 4px solid #1f77b4;
         margin-bottom: 20px;
     }
+    /* ADD THIS NEW CSS CLASS */
+    .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        background-color: #1f77b4;
+        color: white;
+        text-align: center;
+        padding: 8px 0;
+        font-size: 12px;
+        z-index: 999;
+        box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+    }
+    .footer a {
+        color: #17becf;
+        text-decoration: none;
+    }
+    .footer a:hover {
+        text-decoration: underline;
+    }
+    /* Add bottom margin to main content to avoid footer overlap */
+    .main .block-container {
+        padding-bottom: 60px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -62,8 +87,7 @@ def main():
     # Main title
     st.markdown("""
     <div class="main-header">
-        <h1>🏢 Sistema de Gestión de Solicitudes</h1>
-        <p>Plataforma integral para el registro y seguimiento de solicitudes - SharePoint Lists</p>
+        <h1> Sistema de Gestión de Solicitudes</h1>
     </div>
     """, unsafe_allow_html=True)
     
@@ -101,6 +125,13 @@ def main():
     
     with tabs[1]:
         mostrar_tab_dashboard(data_manager)
+
+    st.markdown("""
+    <div class="footer">
+        © 2025 Instituto Geográfico Agustín Codazzi (IGAC) - Todos los derechos reservados | 
+        Sistema de Gestión de Solicitudes v1.0
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()

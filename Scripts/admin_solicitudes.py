@@ -33,13 +33,39 @@ def agregar_comentario_admin(comentario_actual, nuevo_comentario, responsable):
         # First comment
         return nuevo_entry
 
+def clean_html_content(content):
+    """Clean HTML content for display - shared utility function"""
+    if not content or not isinstance(content, str):
+        return "Sin contenido disponible"
+    
+    import re
+    from html import unescape
+    
+    # First, decode HTML entities
+    content_clean = unescape(content)
+    
+    # Remove all HTML tags but preserve the text content
+    content_clean = re.sub(r'<[^>]+>', '', content_clean)
+    
+    # Clean up extra whitespace and newlines
+    content_clean = re.sub(r'\s+', ' ', content_clean).strip()
+    
+    # If the result is empty or too short, show fallback
+    if not content_clean or len(content_clean.strip()) < 3:
+        return "Sin contenido disponible"
+    
+    return content_clean
+
 def formatear_comentarios_admin_display(comentarios):
-    """Format admin comments for display in admin panel"""
+    """Format admin comments for display in admin panel - UPDATED with HTML cleaning"""
     if not comentarios or not comentarios.strip():
         return "Sin comentarios previos"
     
+    # Clean HTML content first
+    comentarios_clean = clean_html_content(comentarios)
+    
     # Split by double newlines (comment separators)
-    comentarios_lista = comentarios.split('\n\n')
+    comentarios_lista = comentarios_clean.split('\n\n')
     comentarios_html = []
     
     for comentario in comentarios_lista:
@@ -175,8 +201,26 @@ def obtener_solicitudes_proceso(data_manager, proceso_admin):
     
     return pd.DataFrame()
 
+def normalize_datetime(dt):
+    """Normalize datetime to timezone-naive for consistent comparisons"""
+    if dt is None:
+        return None
+    
+    if hasattr(dt, 'tz_localize'):
+        # It's a pandas Timestamp
+        if dt.tz is not None:
+            return dt.tz_localize(None)
+        return dt
+    elif hasattr(dt, 'tzinfo'):
+        # It's a datetime object
+        if dt.tzinfo is not None:
+            return dt.replace(tzinfo=None)
+        return dt
+    
+    return dt
+
 def mostrar_mini_dashboard(df, proceso):
-    """Mini dashboard del proceso"""
+    """Mini dashboard del proceso - UPDATED with timezone handling"""
     st.subheader(f"📊 Dashboard - {proceso}")
     
     # Métricas principales
@@ -198,13 +242,23 @@ def mostrar_mini_dashboard(df, proceso):
         completadas = len(df[df['estado'] == 'Completado'])
         st.metric("✅ Completadas", completadas)
     
-    # Alertas
+    # Alertas - FIXED timezone comparison
     if pendientes > 0:
         fecha_limite = datetime.now() - timedelta(days=7)
-        antiguas = df[(df['estado'] == 'Pendiente') & (df['fecha_solicitud'] < fecha_limite)]
         
-        if not antiguas.empty:
-            st.warning(f"⚠️ {len(antiguas)} solicitudes pendientes por más de 7 días")
+        # Normalize datetime columns for comparison
+        df_normalized = df.copy()
+        if 'fecha_solicitud' in df_normalized.columns:
+            df_normalized['fecha_solicitud'] = df_normalized['fecha_solicitud'].apply(normalize_datetime)
+            
+            # Filter for old pending requests
+            antiguas = df_normalized[
+                (df_normalized['estado'] == 'Pendiente') & 
+                (df_normalized['fecha_solicitud'] < fecha_limite)
+            ]
+            
+            if not antiguas.empty:
+                st.warning(f"⚠️ {len(antiguas)} solicitudes pendientes por más de 7 días")
     
     # Gráfico de estados
     if total > 0:
@@ -280,7 +334,7 @@ def mostrar_filtros_busqueda(df):
     st.write(f"📋 Mostrando {len(df_filtrado)} solicitudes")
 
 def mostrar_lista_solicitudes_admin(data_manager, df, proceso):
-    """Lista de solicitudes para administrar - SharePoint optimized"""
+    """Lista de solicitudes para administrar - SharePoint optimized - UPDATED with timezone handling"""
     
     # Obtener DataFrame filtrado
     df_filtrado = st.session_state.get('df_filtrado', df)
@@ -291,11 +345,18 @@ def mostrar_lista_solicitudes_admin(data_manager, df, proceso):
     
     st.subheader("📋 Gestionar Solicitudes")
     
-    # Ordenar por prioridad y fecha
+    # Ordenar por prioridad y fecha - FIXED timezone handling
     if 'prioridad' in df_filtrado.columns:
-        orden_prioridad = {'Alta': 0, 'Media': 1, 'Baja': 2}
-        df_filtrado['orden_prioridad'] = df_filtrado['prioridad'].map(orden_prioridad)
-        df_filtrado = df_filtrado.sort_values(['orden_prioridad', 'fecha_solicitud'])
+        orden_prioridad = {'Alta': 0, 'Media': 1, 'Baja': 2, 'Sin asignar': 3}
+        df_filtrado = df_filtrado.copy()  # Avoid SettingWithCopyWarning
+        df_filtrado['orden_prioridad'] = df_filtrado['prioridad'].map(orden_prioridad).fillna(3)
+        
+        # Normalize fecha_solicitud for sorting
+        if 'fecha_solicitud' in df_filtrado.columns:
+            df_filtrado['fecha_solicitud_norm'] = df_filtrado['fecha_solicitud'].apply(normalize_datetime)
+            df_filtrado = df_filtrado.sort_values(['orden_prioridad', 'fecha_solicitud_norm'])
+        else:
+            df_filtrado = df_filtrado.sort_values(['orden_prioridad'])
     
     # Mostrar cada solicitud
     for idx, solicitud in df_filtrado.iterrows():
@@ -337,20 +398,30 @@ def mostrar_solicitud_admin(data_manager, solicitud, proceso):
                 st.write(f"**Territorial:** {solicitud['territorial']}")
             
             if 'fecha_solicitud' in solicitud:
-                fecha_str = solicitud['fecha_solicitud'].strftime('%d/%m/%Y %H:%M')
-                st.write(f"**Fecha:** {fecha_str}")
+                # Normalize datetime before formatting
+                fecha_solicitud = normalize_datetime(solicitud['fecha_solicitud'])
+                if fecha_solicitud:
+                    fecha_str = fecha_solicitud.strftime('%d/%m/%Y %H:%M')
+                    st.write(f"**Fecha:** {fecha_str}")
+                else:
+                    st.write("**Fecha:** No disponible")
         
         with col2:
             st.write("**📝 Descripción**")
+            
+            # Clean description content before displaying
+            descripcion_original = solicitud.get('descripcion', '')
+            descripcion_limpia = clean_html_content(descripcion_original)
+            
             st.text_area(
                 "Descripción:",
-                value=solicitud.get('descripcion', ''),
+                value=descripcion_limpia,
                 height=100,
                 disabled=True,
                 key=f"desc_{solicitud['id_solicitud']}"
             )
         
-        # ENHANCED: Display comment history
+        # ENHANCED: Display comment history - UPDATED with HTML cleaning
         st.markdown("---")
         comentarios_actuales = solicitud.get('comentarios_admin', '')
         
@@ -360,13 +431,17 @@ def mostrar_solicitud_admin(data_manager, solicitud, proceso):
             # Check if there are multiple timestamped comments
             if '[' in comentarios_actuales and ']:' in comentarios_actuales:
                 comentarios_formateados = formatear_comentarios_admin_display(comentarios_actuales)
-                num_comentarios = len([c for c in comentarios_actuales.split('\n\n') if c.strip()])
+                
+                # Count number of comments (after cleaning)
+                comentarios_clean = clean_html_content(comentarios_actuales)
+                num_comentarios = len([c for c in comentarios_clean.split('\n\n') if c.strip()])
                 
                 with st.expander(f"Ver {num_comentarios} comentario(s) previo(s)", expanded=False):
                     st.markdown(comentarios_formateados)
             else:
-                # Single old comment
-                st.info(f"**Comentario previo:** {comentarios_actuales}")
+                # Single old comment - clean HTML first
+                comentario_limpio = clean_html_content(comentarios_actuales)
+                st.info(f"**Comentario previo:** {comentario_limpio}")
         else:
             st.markdown("**💬 Comentarios Administrativos**")
             st.info("Sin comentarios previos")
@@ -585,14 +660,37 @@ def procesar_actualizacion_sharepoint_enhanced(data_manager, solicitud, nuevo_es
                         if files_uploaded:
                             comentario_para_usuario += f"\n\nArchivos adjuntos: {', '.join(files_uploaded)}"
                         
-                        email_sent = email_manager.send_status_update_notification(
-                            solicitud_data, nuevo_estado, comentario_para_usuario
-                        )
+                        # ENHANCED: Send with file attachment if files were uploaded
+                        if files_uploaded and len(files_uploaded) == 1:
+                            # For single file, send with attachment
+                            file_name = files_uploaded[0]
+                            # Get the file data from the most recent upload
+                            for uploaded_file in new_files:
+                                if uploaded_file.name == file_name:
+                                    uploaded_file.seek(0)  # Reset file pointer
+                                    file_data = uploaded_file.read()
+                                    
+                                    email_sent = email_manager.send_status_update_with_attachment(
+                                        solicitud_data, nuevo_estado, comentario_para_usuario,
+                                        file_data, file_name
+                                    )
+                                    break
+                            else:
+                                # Fallback to regular email if file not found
+                                email_sent = email_manager.send_status_update_notification(
+                                    solicitud_data, nuevo_estado, comentario_para_usuario
+                                )
+                        else:
+                            # Regular email for no files or multiple files
+                            email_sent = email_manager.send_status_update_notification(
+                                solicitud_data, nuevo_estado, comentario_para_usuario
+                            )
                         
                         if email_sent:
                             st.success("📧 Notificación enviada al solicitante")
                     except Exception as e:
                         st.warning(f"⚠️ Error enviando notificación: {e}")
+                        print(f"Email notification error details: {e}")  # For debugging
                 
                 if notificar_responsable and email_responsable:
                     st.success(f"📧 Notificación programada para {email_responsable}")
