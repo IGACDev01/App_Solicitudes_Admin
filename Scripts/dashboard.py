@@ -6,6 +6,61 @@ from datetime import datetime, timedelta
 import numpy as np
 import time
 
+# Dashboard admin credentials
+DASHBOARD_CREDENTIALS = {
+    "usuario": "admin_dashboard",
+    "password": "dashboard2025"
+}
+
+def autenticar_dashboard(usuario, password):
+    """Authenticate dashboard credentials"""
+    return usuario == DASHBOARD_CREDENTIALS["usuario"] and password == DASHBOARD_CREDENTIALS["password"]
+
+def mostrar_login_dashboard():
+    """Show dashboard login form"""
+    st.markdown("### 🔐 Acceso al Dashboard")
+    st.markdown("---")
+    
+    # Center the login form
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        with st.form("dashboard_login"):
+            st.markdown("**Credenciales de Administrador**")
+            
+            usuario = st.text_input(
+                "Usuario:",
+                placeholder="Ingrese su usuario",
+                key="dashboard_usuario"
+            )
+            
+            password = st.text_input(
+                "Contraseña:",
+                type="password",
+                placeholder="Ingrese su contraseña",
+                key="dashboard_password"
+            )
+            
+            submitted = st.form_submit_button(
+                "🔓 Acceder al Dashboard",
+                use_container_width=True,
+                type="primary"
+            )
+            
+            if submitted:
+                if autenticar_dashboard(usuario, password):
+                    st.session_state.dashboard_authenticated = True
+                    st.session_state.dashboard_usuario = usuario
+                    st.success("✅ Acceso autorizado")
+                    st.rerun()
+                else:
+                    st.error("❌ Credenciales incorrectas")
+    
+    # Show credentials for testing
+    with st.expander("💡 Credenciales de Prueba"):
+        st.code(f"Usuario: {DASHBOARD_CREDENTIALS['usuario']}")
+        st.code(f"Contraseña: {DASHBOARD_CREDENTIALS['password']}")
+
 def formatear_tiempo_dashboard(dias):
     """Formatear tiempo en días para el dashboard"""
     if pd.isna(dias) or dias == 0:
@@ -48,9 +103,31 @@ def safe_datetime_operation(dt_series, operation='max'):
         return None
 
 def mostrar_tab_dashboard(data_manager):
-    """Mostrar el tab del dashboard - SharePoint optimized"""
+    """Main dashboard tab with authentication - UPDATED with login"""
     
-    st.header("📊 Dashboard de Solicitudes")
+    # Check authentication
+    if not st.session_state.get('dashboard_authenticated', False):
+        mostrar_login_dashboard()
+        return
+    
+    # Header with logout option
+    col1, col2, col3 = st.columns([2, 1, 1])
+    
+    with col1:
+        st.header("📊 Dashboard de Solicitudes")
+        st.caption(f"Sesión: {st.session_state.get('dashboard_usuario', 'Admin')}")
+    
+    with col2:
+        if st.button("🔄 Refresh Data", key="refresh_dashboard"):
+            data_manager.load_data(force_reload=True)
+            st.rerun()
+    
+    with col3:
+        if st.button("🚪 Cerrar Sesión", key="logout_dashboard"):
+            st.session_state.dashboard_authenticated = False
+            st.session_state.dashboard_usuario = None
+            st.rerun()
+    
     st.markdown("---")
     
     # Barra de control superior
@@ -63,8 +140,9 @@ def mostrar_tab_dashboard(data_manager):
         auto_refresh = st.checkbox("🔄 Auto-actualizar", value=False, key="auto_refresh")
     
     with col3:
-        if st.button("🔄 Actualizar Datos", key="refresh_dashboard") or auto_refresh:
+        if auto_refresh:
             data_manager.load_data(force_reload=True)
+            time.sleep(1)
             st.rerun()
     
     # SharePoint status
