@@ -25,20 +25,18 @@ def mostrar_login_dashboard():
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        with st.form("dashboard_login"):
+        with st.form("dashboard_login_form"):
             st.markdown("**Credenciales de Administrador**")
             
             usuario = st.text_input(
                 "Usuario:",
-                placeholder="Ingrese su usuario",
-                key="dashboard_usuario"
+                placeholder="Ingrese su usuario"
             )
             
             password = st.text_input(
                 "Contraseña:",
                 type="password",
-                placeholder="Ingrese su contraseña",
-                key="dashboard_password"
+                placeholder="Ingrese su contraseña"
             )
             
             submitted = st.form_submit_button(
@@ -50,7 +48,7 @@ def mostrar_login_dashboard():
             if submitted:
                 if autenticar_dashboard(usuario, password):
                     st.session_state.dashboard_authenticated = True
-                    st.session_state.dashboard_usuario = usuario
+                    st.session_state.dashboard_usuario_logged = usuario
                     st.success("✅ Acceso autorizado")
                     st.rerun()
                 else:
@@ -115,7 +113,7 @@ def mostrar_tab_dashboard(data_manager):
     
     with col1:
         st.header("📊 Dashboard de Solicitudes")
-        st.caption(f"Sesión: {st.session_state.get('dashboard_usuario', 'Admin')}")
+        st.caption(f"Sesión: {st.session_state.get('dashboard_usuario_logged', 'Admin')}")
     
     with col2:
         if st.button("🔄 Refresh Data", key="refresh_dashboard"):
@@ -125,7 +123,8 @@ def mostrar_tab_dashboard(data_manager):
     with col3:
         if st.button("🚪 Cerrar Sesión", key="logout_dashboard"):
             st.session_state.dashboard_authenticated = False
-            st.session_state.dashboard_usuario = None
+            if 'dashboard_usuario_logged' in st.session_state:
+                del st.session_state.dashboard_usuario_logged
             st.rerun()
     
     st.markdown("---")
