@@ -126,12 +126,17 @@ def main():
     with tabs[1]:
         mostrar_tab_dashboard(data_manager)
 
+    if "initial_rerun_done" not in st.session_state:
+        st.session_state.initial_rerun_done = True
+        st.rerun()
+
     st.markdown("""
     <div class="footer">
         © 2025 Instituto Geográfico Agustín Codazzi (IGAC) - Todos los derechos reservados | 
         Sistema de Gestión de Solicitudes v1.0
     </div>
     """, unsafe_allow_html=True)
+    
 
 if __name__ == "__main__":
     main()
