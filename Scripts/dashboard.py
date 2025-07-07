@@ -6,6 +6,36 @@ from datetime import datetime, timedelta
 import numpy as np
 import time
 
+def mostrar_login_dashboard():
+    """Login interface for dashboard access"""
+    st.markdown("### 🔐 Acceso al Dashboard")
+    
+    with st.form("dashboard_login"):
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
+        with col2:
+            usuario = st.text_input("Usuario:", key="usuario_dashboard_login")
+            password = st.text_input("Contraseña:", type="password", key="password_dashboard_login")
+            
+            submitted = st.form_submit_button("🔓 Acceder al Dashboard", use_container_width=True)
+            
+            if submitted:
+                if autenticar_dashboard(usuario, password):
+                    st.session_state.dashboard_authenticated = True
+                    st.session_state.dashboard_usuario = usuario
+                    st.success(f"✅ Bienvenido al Dashboard, {usuario}")
+                    st.rerun()
+                else:
+                    st.error("❌ Credenciales incorrectas")
+    
+    # Show credentials
+    with st.expander("💡 Credenciales de Acceso"):
+        st.write("**Dashboard Admin:** `dashboard_admin` / `dashboard2025`")
+
+def autenticar_dashboard(usuario, password):
+    """Authenticate dashboard credentials - single admin level"""
+    return usuario == "dashboard_admin" and password == "dashboard2025"
+
 def formatear_tiempo_dashboard(dias):
     """Formatear tiempo en días para el dashboard"""
     if pd.isna(dias) or dias == 0:
@@ -48,22 +78,43 @@ def safe_datetime_operation(dt_series, operation='max'):
         return None
 
 def mostrar_tab_dashboard(data_manager):
-    """Mostrar el tab del dashboard - SharePoint optimized"""
+    """Mostrar el tab del dashboard - SharePoint optimized with simple login"""
     
-    st.header("📊 Dashboard de Solicitudes")
+    # Check authentication first
+    if not st.session_state.get('dashboard_authenticated', False):
+        mostrar_login_dashboard()
+        return
+    
+    # Header with logout option
+    col1, col2, col3 = st.columns([2, 1, 1])
+    
+    with col1:
+        st.header("📊 Dashboard de Solicitudes")
+        usuario_actual = st.session_state.get('dashboard_usuario', 'Usuario')
+        st.caption(f"👤 Sesión activa: {usuario_actual}")
+    
+    with col2:
+        if st.button("🔄 Actualizar Datos", key="refresh_dashboard"):
+            data_manager.load_data(force_reload=True)
+            st.rerun()
+    
+    with col3:
+        if st.button("🚪 Cerrar Sesión", key="logout_dashboard"):
+            st.session_state.dashboard_authenticated = False
+            st.session_state.dashboard_usuario = None
+            st.rerun()
+    
     st.markdown("---")
     
-    # Barra de control superior
-    col1, col2, col3 = st.columns([2, 1, 1])
+    # Barra de control
+    col1, col2 = st.columns([3, 1])
     
     with col1:
         st.markdown("**Panel de control y análisis de solicitudes**")
     
     with col2:
         auto_refresh = st.checkbox("🔄 Auto-actualizar", value=False, key="auto_refresh")
-    
-    with col3:
-        if st.button("🔄 Actualizar Datos", key="refresh_dashboard") or auto_refresh:
+        if auto_refresh:
             data_manager.load_data(force_reload=True)
             st.rerun()
     
@@ -135,7 +186,7 @@ def mostrar_tab_dashboard(data_manager):
     
     # DataFrame Visualizer
     mostrar_dataframe_visualizer(data_manager)
-
+    
 def mostrar_dataframe_visualizer(data_manager):
     """Mostrar visualizador de DataFrame con filtros avanzados - SharePoint optimized"""
     st.subheader("🔍 Explorador de Datos")

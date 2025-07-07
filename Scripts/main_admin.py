@@ -83,7 +83,24 @@ def get_data_manager():
         st.error(f"Failed to initialize SharePoint List connection: {e}")
         st.stop()
 
+def initialize_session_state():
+    """Initialize session state variables"""
+    if 'dashboard_authenticated' not in st.session_state:
+        st.session_state.dashboard_authenticated = False
+    if 'dashboard_usuario' not in st.session_state:
+        st.session_state.dashboard_usuario = None
+    if 'admin_authenticated' not in st.session_state:
+        st.session_state.admin_authenticated = False
+    if 'admin_proceso' not in st.session_state:
+        st.session_state.admin_proceso = None
+    if 'admin_usuario' not in st.session_state:
+        st.session_state.admin_usuario = None
+
 def main():
+
+    # Initialize session state
+    initialize_session_state()
+    
     # Main title
     st.markdown("""
     <div class="main-header">
