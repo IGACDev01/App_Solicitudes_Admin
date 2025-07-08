@@ -24,14 +24,6 @@ st.markdown("""
         color: white;
         text-align: center;
     }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 2px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        padding-left: 20px;
-        padding-right: 20px;
-    }
     .sharepoint-status {
         background: #f0f8ff;
         padding: 10px;
@@ -127,25 +119,21 @@ def main():
         st.caption(f"📊 Datos en caché | Total solicitudes: {len(cached_df)} | Actualizado: {last_update} | Cache TTL: 60s")
     
     
-    # Create tabs
-    tab_titles = [
-        "⚙️ Administrar Solicitudes",
-        "📊 Dashboard"
-    ]
+    # Create segmented control for navigation
+    tab = st.segmented_control(
+        "Navegación",
+        ["⚙️ Administrar Solicitudes", "📊 Dashboard"],
+        selection_mode="single",
+        default="⚙️ Administrar Solicitudes",
+        label_visibility="collapsed",
+    )
     
-    # Create tabs
-    tabs = st.tabs(tab_titles)
-    
-    # Show content based on tab selection  
-    with tabs[0]:
+    # Show content based on segmented control selection  
+    if tab == "⚙️ Administrar Solicitudes":
         mostrar_tab_admin(data_manager)
     
-    with tabs[1]:
+    elif tab == "📊 Dashboard":
         mostrar_tab_dashboard(data_manager)
-
-    if "initial_rerun_done" not in st.session_state:
-        st.session_state.initial_rerun_done = True
-        st.rerun()
 
     st.markdown("""
     <div class="footer">
