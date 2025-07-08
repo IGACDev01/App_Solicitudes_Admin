@@ -268,6 +268,37 @@ class SharePointListManager:
         # Load initial data
         self.load_data()
     
+    def _normalize_datetime(self, dt) -> Optional[datetime]:
+        """Normalize datetime to timezone-naive for consistent handling"""
+        if dt is None:
+            return None
+        
+        try:
+            # If it's a pandas Timestamp
+            if hasattr(dt, 'tz_localize'):
+                if dt.tz is not None:
+                    return dt.tz_localize(None).to_pydatetime()
+                return dt.to_pydatetime()
+            
+            # If it's a datetime object
+            if hasattr(dt, 'tzinfo'):
+                if dt.tzinfo is not None:
+                    return dt.replace(tzinfo=None)
+                return dt
+            
+            # If it's a string, parse it
+            if isinstance(dt, str):
+                parsed = pd.to_datetime(dt, errors='coerce')
+                if pd.notna(parsed):
+                    if parsed.tz is not None:
+                        return parsed.tz_localize(None).to_pydatetime()
+                    return parsed.to_pydatetime()
+            
+            return dt
+        except Exception as e:
+            print(f"Error normalizing datetime {dt}: {e}")
+            return None
+    
     def load_data(self, force_reload: bool = True):
         """Load data from SharePoint List"""
         try:
@@ -305,13 +336,13 @@ class SharePointListManager:
                 for item in items:
                     fields = item.get('fields', {})
                     
-                    # Map SharePoint fields to your DataFrame columns
+                    # Map SharePoint fields to your DataFrame columns - with timezone normalization
                     row = {
                         'id_solicitud': fields.get('IDSolicitud', ''),
                         'territorial': fields.get('Territorial', ''),
                         'nombre_solicitante': fields.get('NombreSolicitante', ''),
                         'email_solicitante': fields.get('EmailSolicitante', ''),
-                        'fecha_solicitud': self._parse_date(fields.get('FechaSolicitud')),
+                        'fecha_solicitud': self._normalize_datetime(self._parse_date(fields.get('FechaSolicitud'))),
                         'tipo_solicitud': fields.get('TipoSolicitud', ''),
                         'area': fields.get('Area', ''),
                         'proceso': fields.get('Proceso', ''),
@@ -319,8 +350,8 @@ class SharePointListManager:
                         'descripcion': fields.get('Descripcion', ''),
                         'estado': fields.get('Estado', 'Pendiente'),
                         'responsable_asignado': fields.get('ResponsableAsignado', ''),
-                        'fecha_actualizacion': self._parse_date(fields.get('FechaActualizacion')),
-                        'fecha_completado': self._parse_date(fields.get('FechaCompletado')),
+                        'fecha_actualizacion': self._normalize_datetime(self._parse_date(fields.get('FechaActualizacion'))),
+                        'fecha_completado': self._normalize_datetime(self._parse_date(fields.get('FechaCompletado'))),
                         'comentarios_admin': fields.get('ComentariosAdmin', ''),
                         'tiempo_respuesta_dias': fields.get('TiempoRespuestaDias', 0),
                         'tiempo_resolucion_dias': fields.get('TiempoResolucionDias', 0),
@@ -413,7 +444,7 @@ class SharePointListManager:
     
     def update_request_status(self, id_solicitud: str, nuevo_estado: str, 
                             responsable: str = "", comentarios: str = "") -> bool:
-        """Update request status in SharePoint List - ENHANCED with comment support"""
+        """Update request status in SharePoint List - FIXED timezone handling"""
         try:
             # Find the SharePoint item
             sharepoint_id = self._get_sharepoint_item_id(id_solicitud)
@@ -443,15 +474,20 @@ class SharePointListManager:
             if nuevo_estado == 'Completado':
                 update_data['FechaCompletado'] = current_time
                 
-                # Calculate resolution time
+                # Calculate resolution time - FIXED timezone handling
                 original_item = self.get_request_by_id(id_solicitud)
                 if not original_item.empty:
                     fecha_solicitud = original_item.iloc[0]['fecha_solicitud']
                     if pd.notna(fecha_solicitud):
-                        tiempo_resolucion = (datetime.now() - fecha_solicitud).total_seconds() / (24 * 3600)
-                        update_data['TiempoResolucionDias'] = round(tiempo_resolucion, 2)
+                        # Normalize both dates to timezone-naive
+                        fecha_solicitud_norm = self._normalize_datetime(fecha_solicitud)
+                        fecha_actual_norm = datetime.now()
+                        
+                        if fecha_solicitud_norm:
+                            tiempo_resolucion = (fecha_actual_norm - fecha_solicitud_norm).total_seconds() / (24 * 3600)
+                            update_data['TiempoResolucionDias'] = round(tiempo_resolucion, 2)
             
-            # Calculate response time if this is the first update
+            # Calculate response time if this is the first update - FIXED timezone handling
             if nuevo_estado != 'Pendiente':
                 original_item = self.get_request_by_id(id_solicitud)
                 if not original_item.empty:
@@ -459,8 +495,13 @@ class SharePointListManager:
                     if current_response_time == 0:
                         fecha_solicitud = original_item.iloc[0]['fecha_solicitud']
                         if pd.notna(fecha_solicitud):
-                            tiempo_respuesta = (datetime.now() - fecha_solicitud).total_seconds() / (24 * 3600)
-                            update_data['TiempoRespuestaDias'] = round(tiempo_respuesta, 2)
+                            # Normalize both dates to timezone-naive
+                            fecha_solicitud_norm = self._normalize_datetime(fecha_solicitud)
+                            fecha_actual_norm = datetime.now()
+                            
+                            if fecha_solicitud_norm:
+                                tiempo_respuesta = (fecha_actual_norm - fecha_solicitud_norm).total_seconds() / (24 * 3600)
+                                update_data['TiempoRespuestaDias'] = round(tiempo_respuesta, 2)
             
             # Update SharePoint list item
             update_url = f"{self.graph_config['graph_url']}/sites/{self.sharepoint_site_id}/lists/{self.list_id}/items/{sharepoint_id}/fields"
@@ -713,7 +754,7 @@ class SharePointListManager:
         return True
     
     def get_requests_summary(self) -> Dict[str, Any]:
-        """Get requests summary for dashboard"""
+        """Get requests summary for dashboard - FIXED timezone handling"""
         if self.df is None or self.df.empty:
             return {
                 'total_solicitudes': 0,
@@ -748,10 +789,27 @@ class SharePointListManager:
             por_proceso = self.df['proceso'].value_counts().to_dict()
             por_territorial = self.df['territorial'].value_counts().to_dict()
             
-            # Monthly distribution
-            self.df['mes_solicitud'] = self.df['fecha_solicitud'].dt.to_period('M')
-            por_mes = self.df['mes_solicitud'].value_counts().sort_index().to_dict()
-            por_mes = {str(k): v for k, v in por_mes.items()}
+            # Monthly distribution - FIXED timezone handling
+            df_copy = self.df.copy()
+            
+            # Ensure fecha_solicitud is timezone-naive before converting to period
+            if 'fecha_solicitud' in df_copy.columns:
+                # Normalize all datetime values first
+                df_copy['fecha_solicitud_norm'] = df_copy['fecha_solicitud'].apply(self._normalize_datetime)
+                
+                # Convert to pandas datetime, ensuring timezone-naive
+                df_copy['fecha_solicitud_pd'] = pd.to_datetime(df_copy['fecha_solicitud_norm'], errors='coerce')
+                
+                # Create period only for non-null dates
+                mask = df_copy['fecha_solicitud_pd'].notna()
+                if mask.any():
+                    df_copy.loc[mask, 'mes_solicitud'] = df_copy.loc[mask, 'fecha_solicitud_pd'].dt.to_period('M')
+                    por_mes = df_copy['mes_solicitud'].value_counts().sort_index().to_dict()
+                    por_mes = {str(k): v for k, v in por_mes.items() if pd.notna(k)}
+                else:
+                    por_mes = {}
+            else:
+                por_mes = {}
             
             return {
                 'total_solicitudes': total,
@@ -768,7 +826,19 @@ class SharePointListManager:
             }
         except Exception as e:
             print(f"Error generating summary: {e}")
-            return {}
+            return {
+                'total_solicitudes': 0,
+                'solicitudes_activas': 0,
+                'solicitudes_completadas': 0,
+                'tiempo_promedio_respuesta': 0,
+                'tiempo_promedio_resolucion': 0,
+                'solicitudes_por_estado': {},
+                'solicitudes_por_tipo': {},
+                'solicitudes_por_area': {},
+                'solicitudes_por_proceso': {},
+                'solicitudes_por_territorial': {},
+                'solicitudes_por_mes': {}
+            }
     
     def get_sharepoint_status(self) -> Dict[str, Any]:
         """Get SharePoint connection status"""
