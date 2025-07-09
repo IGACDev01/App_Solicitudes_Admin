@@ -552,7 +552,7 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
             
             # Update button
             actualizar = st.form_submit_button(
-                "💾 Actualizar y Guardar en SharePoint",
+                "💾 Actualizar",
                 type="primary",
                 use_container_width=True
             )
