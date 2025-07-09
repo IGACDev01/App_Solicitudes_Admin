@@ -359,7 +359,7 @@ def mostrar_lista_solicitudes_admin_improved(data_manager, df, proceso):
     # Show each request with improved function
     for idx, solicitud in df_filtrado.iterrows():
         mostrar_solicitud_admin_improved(data_manager, solicitud, proceso)
-
+        
 def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
     """Improved version of mostrar_solicitud_admin with better UI state management"""
     
@@ -515,6 +515,25 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
                     help="Este comentario se agregará al historial con fecha y hora automáticas"
                 )
             
+            # File upload section in form
+            st.markdown("**📎 Subir Archivos Adicionales**")
+            new_files = st.file_uploader(
+                "Seleccionar archivos para subir:",
+                accept_multiple_files=True,
+                type=['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'jpg', 'jpeg', 'png', 'zip'],
+                help="Máximo 10MB por archivo. Se guardarán como attachments en SharePoint.",
+                key=f"admin_files_{solicitud['id_solicitud']}"
+            )
+            
+            if new_files:
+                st.info(f"📎 {len(new_files)} archivo(s) seleccionado(s) para subir")
+                for file in new_files:
+                    file_size_mb = file.size / (1024 * 1024)
+                    if file_size_mb > 10:
+                        st.error(f"❌ {file.name} es muy grande ({file_size_mb:.1f}MB)")
+                    else:
+                        st.success(f"✅ {file.name} ({file_size_mb:.1f}MB)")
+            
             # Notification options
             col1, col2 = st.columns(2)
             with col1:
@@ -533,7 +552,7 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
             
             # Update button
             actualizar = st.form_submit_button(
-                "💾 Actualizar Solicitud",
+                "💾 Actualizar y Guardar en SharePoint",
                 type="primary",
                 use_container_width=True
             )
@@ -543,7 +562,7 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
                 procesar_actualizacion_sharepoint_simplified(
                     data_manager, solicitud, nuevo_estado, nueva_prioridad, 
                     responsable, email_responsable, nuevo_comentario,
-                    notificar_solicitante, notificar_responsable
+                    notificar_solicitante, notificar_responsable, new_files
                 )
 
 def mostrar_archivos_adjuntos_admin(data_manager, id_solicitud):
@@ -605,7 +624,7 @@ def mostrar_archivos_adjuntos_admin(data_manager, id_solicitud):
 
 def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_estado, nueva_prioridad, 
                                                 responsable, email_responsable, nuevo_comentario,
-                                                notificar_solicitante, notificar_responsable):
+                                                notificar_solicitante, notificar_responsable, new_files=None):
     """Simplified and reliable update process - No forced rerun"""
     
     try:
@@ -659,6 +678,28 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
             
             # Send notifications
             email_sent = False
+            files_uploaded = []
+            
+            # Handle file uploads first
+            if new_files:
+                status.write(f"📎 Subiendo {len(new_files)} archivo(s)...")
+                for uploaded_file in new_files:
+                    if uploaded_file.size <= 10 * 1024 * 1024:  # 10MB limit
+                        try:
+                            file_data = uploaded_file.read()
+                            success = data_manager.upload_attachment_to_item(
+                                solicitud['id_solicitud'], file_data, uploaded_file.name
+                            )
+                            if success:
+                                files_uploaded.append(uploaded_file.name)
+                                status.write(f"✅ {uploaded_file.name} subido")
+                            else:
+                                status.write(f"⚠️ Error subiendo {uploaded_file.name}")
+                        except Exception as file_error:
+                            status.write(f"⚠️ Error con {uploaded_file.name}: {file_error}")
+                    else:
+                        status.write(f"❌ {uploaded_file.name} muy grande (>10MB)")
+            
             if notificar_solicitante:
                 status.write("📧 Enviando notificación...")
                 try:
@@ -673,9 +714,36 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
                     }
                     
                     comentario_para_usuario = nuevo_comentario.strip() if nuevo_comentario and nuevo_comentario.strip() else f"Estado actualizado a: {nuevo_estado}"
-                    email_sent = email_manager.send_status_update_notification(
-                        solicitud_data, nuevo_estado, comentario_para_usuario
-                    )
+                    
+                    # Add file info to user notification if files were uploaded
+                    if files_uploaded:
+                        comentario_para_usuario += f"\n\nArchivos adjuntos: {', '.join(files_uploaded)}"
+                    
+                    # Send with file attachment if single file was uploaded
+                    if files_uploaded and len(files_uploaded) == 1:
+                        # For single file, send with attachment
+                        file_name = files_uploaded[0]
+                        # Get the file data from the most recent upload
+                        for uploaded_file in new_files:
+                            if uploaded_file.name == file_name:
+                                uploaded_file.seek(0)  # Reset file pointer
+                                file_data = uploaded_file.read()
+                                
+                                email_sent = email_manager.send_status_update_with_attachment(
+                                    solicitud_data, nuevo_estado, comentario_para_usuario,
+                                    file_data, file_name
+                                )
+                                break
+                        else:
+                            # Fallback to regular email if file not found
+                            email_sent = email_manager.send_status_update_notification(
+                                solicitud_data, nuevo_estado, comentario_para_usuario
+                            )
+                    else:
+                        # Regular email for no files or multiple files
+                        email_sent = email_manager.send_status_update_notification(
+                            solicitud_data, nuevo_estado, comentario_para_usuario
+                        )
                     
                     if email_sent:
                         status.write("✅ Notificación enviada")
@@ -695,7 +763,7 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
         
         # Show summary without blocking UI
         show_update_summary(solicitud, nuevo_estado, nueva_prioridad, responsable, 
-                          nuevo_comentario, email_sent, notificar_responsable, email_responsable)
+                          nuevo_comentario, email_sent, notificar_responsable, email_responsable, files_uploaded)
         
         # Mark this request as recently updated for UI feedback
         st.session_state[f'recently_updated_{solicitud["id_solicitud"]}'] = {
@@ -709,9 +777,9 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
         st.error(f"❌ Error al procesar actualización: {str(e)}")
         print(f"Error details: {e}")
         return False
-    
+
 def show_update_summary(solicitud, nuevo_estado, nueva_prioridad, responsable, 
-                       nuevo_comentario, email_sent, notificar_responsable, email_responsable):
+                       nuevo_comentario, email_sent, notificar_responsable, email_responsable, files_uploaded=None):
     """Show update summary in a clean way"""
     
     changes_summary = []
@@ -729,6 +797,9 @@ def show_update_summary(solicitud, nuevo_estado, nueva_prioridad, responsable,
     
     if email_sent:
         changes_summary.append("Notificación enviada al solicitante")
+    
+    if files_uploaded:
+        changes_summary.append(f"{len(files_uploaded)} archivo(s) subido(s)")
     
     # Show summary in info box
     with st.container():
