@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 from email_manager import EmailManager
-from timezone_utils import get_colombia_time, get_colombia_time_string, format_colombia_datetime, normalize_datetime_for_comparison
+import plotly.express as px
+import plotly.graph_objects as go
 
 # Credenciales por proceso
 ADMIN_CREDENTIALS = {
@@ -21,13 +22,14 @@ ADMIN_CREDENTIALS = {
 
 def agregar_comentario_admin(comentario_actual, nuevo_comentario, responsable):
     """Add a new admin comment with timestamp and author"""
-    # Use Colombia timezone
-    timestamp = get_colombia_time_string('%d/%m/%Y %H:%M')
+    timestamp = datetime.now().strftime('%d/%m/%Y %H:%M')
     nuevo_entry = f"[{timestamp} - {responsable}]: {nuevo_comentario}"
     
     if comentario_actual and comentario_actual.strip():
+        # Append to existing comments
         return f"{comentario_actual}\n\n{nuevo_entry}"
     else:
+        # First comment
         return nuevo_entry
 
 def clean_html_content(content):
@@ -217,7 +219,7 @@ def normalize_datetime(dt):
     return dt
 
 def mostrar_mini_dashboard(df, proceso):
-    """Mini dashboard del proceso"""
+    """Mini dashboard del proceso - UPDATED with timezone handling"""
     st.subheader(f"📊 Dashboard - {proceso}")
     
     # Métricas principales
@@ -241,97 +243,44 @@ def mostrar_mini_dashboard(df, proceso):
     
     # Alertas - FIXED timezone comparison
     if pendientes > 0:
-        # Use Colombia timezone for comparison - get as timezone-naive
-        fecha_limite = get_colombia_time().replace(tzinfo=None) - timedelta(days=7)
+        fecha_limite = datetime.now() - timedelta(days=7)
         
-        # Filter for old pending requests using normalized dates
+        # Normalize datetime columns for comparison
         df_normalized = df.copy()
         if 'fecha_solicitud' in df_normalized.columns:
-            # Normalize all dates to Colombia timezone (timezone-naive)
-            df_normalized['fecha_solicitud_colombia'] = df_normalized['fecha_solicitud'].apply(
-                lambda x: normalize_datetime_for_comparison(x) if pd.notna(x) else None
-            )
+            df_normalized['fecha_solicitud'] = df_normalized['fecha_solicitud'].apply(normalize_datetime)
             
             # Filter for old pending requests
             antiguas = df_normalized[
                 (df_normalized['estado'] == 'Pendiente') & 
-                (df_normalized['fecha_solicitud_colombia'] < fecha_limite) &
-                (df_normalized['fecha_solicitud_colombia'].notna())
+                (df_normalized['fecha_solicitud'] < fecha_limite)
             ]
             
             if not antiguas.empty:
                 st.warning(f"⚠️ {len(antiguas)} solicitudes pendientes por más de 7 días")
-
-def mostrar_alertas_sistema(data_manager):
-    """Mostrar alertas del sistema"""
-    df = data_manager.get_all_requests()
     
-    if df.empty:
-        return
-    
-    alertas = []
-    
-    # Solicitudes antiguas sin actualizar (>7 días) - FIXED datetime handling
-    fecha_limite = get_colombia_time().replace(tzinfo=None) - timedelta(days=7)
-    
-    if 'fecha_actualizacion' in df.columns:
-        try:
-            # Create normalized copy for comparison
-            df_copy = df.copy()
-            df_copy['fecha_actualizacion_colombia'] = df_copy['fecha_actualizacion'].apply(
-                lambda x: normalize_datetime_for_comparison(x) if pd.notna(x) else None
+    # Gráfico de estados
+    if total > 0:
+        estados_data = df['estado'].value_counts()
+        
+        fig = go.Figure(data=[
+            go.Pie(
+                labels=estados_data.index,
+                values=estados_data.values,
+                hole=0.4,
+                marker=dict(colors=['#FFA726', '#42A5F5', '#66BB6A', '#EF5350'])
             )
-            
-            solicitudes_antiguas = df_copy[
-                (df_copy['fecha_actualizacion_colombia'] < fecha_limite) & 
-                (df_copy['estado'] != 'Completado') &
-                (df_copy['fecha_actualizacion_colombia'].notna())
-            ]
-            
-            if not solicitudes_antiguas.empty:
-                alertas.append({
-                    'tipo': 'warning',
-                    'titulo': '⚠️ Solicitudes sin actualizar',
-                    'mensaje': f'{len(solicitudes_antiguas)} solicitudes llevan más de 7 días sin actualización',
-                    'detalle': list(solicitudes_antiguas['id_solicitud'].head(5))
-                })
-        except Exception as e:
-            print(f"Error checking old requests: {e}")
-    
-    # Solicitudes de alta prioridad pendientes
-    if 'prioridad' in df.columns:
-        alta_prioridad_pendientes = df[
-            (df['prioridad'] == 'Alta') & 
-            (df['estado'] == 'Pendiente')
-        ]
-        if not alta_prioridad_pendientes.empty:
-            alertas.append({
-                'tipo': 'error',
-                'titulo': '🔴 Alta prioridad pendiente',
-                'mensaje': f'{len(alta_prioridad_pendientes)} solicitudes de alta prioridad sin atender',
-                'detalle': list(alta_prioridad_pendientes['id_solicitud'].head(5))
-            })
-    
-    # Mostrar alertas
-    if alertas:
-        st.subheader("🚨 Alertas del Sistema")
-        for alerta in alertas:
-            if alerta['tipo'] == 'warning':
-                st.warning(f"**{alerta['titulo']}**: {alerta['mensaje']}")
-            elif alerta['tipo'] == 'error':
-                st.error(f"**{alerta['titulo']}**: {alerta['mensaje']}")
+        ])
+        
+        fig.update_layout(
+            title="Distribución por Estado",
+            height=300,
+            showlegend=True,
+            margin=dict(t=50, b=0, l=0, r=0)
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
 
-def agregar_comentario_admin(comentario_actual, nuevo_comentario, responsable):
-    """Add a new admin comment with timestamp and author"""
-    # Use Colombia timezone with proper formatting
-    timestamp = get_colombia_time_string('%d/%m/%Y %H:%M')
-    nuevo_entry = f"[{timestamp} - {responsable}]: {nuevo_comentario}"
-    
-    if comentario_actual and comentario_actual.strip():
-        return f"{comentario_actual}\n\n{nuevo_entry}"
-    else:
-        return nuevo_entry
-    
 def mostrar_filtros_busqueda(df):
     """Filtros y búsqueda"""
     st.subheader("🔍 Filtros y Búsqueda")
@@ -473,11 +422,13 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
             if 'territorial' in solicitud and pd.notna(solicitud['territorial']):
                 st.write(f"**Territorial:** {solicitud['territorial']}")
             
-            if 'fecha_solicitud' in solicitud and pd.notna(solicitud['fecha_solicitud']):
-                fecha_str = format_colombia_datetime(solicitud['fecha_solicitud'], '%d/%m/%Y %H:%M')
-                st.write(f"**Fecha:** {fecha_str}")
-            else:
-                st.write("**Fecha:** No disponible")
+            if 'fecha_solicitud' in solicitud:
+                fecha_solicitud = normalize_datetime(solicitud['fecha_solicitud'])
+                if fecha_solicitud:
+                    fecha_str = fecha_solicitud.strftime('%d/%m/%Y %H:%M')
+                    st.write(f"**Fecha:** {fecha_str}")
+                else:
+                    st.write("**Fecha:** No disponible")
         
         with col2:
             st.write("**📝 Descripción**")
@@ -815,7 +766,7 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
         
         # Mark this request as recently updated for UI feedback
         st.session_state[f'recently_updated_{solicitud["id_solicitud"]}'] = {
-            'timestamp': get_colombia_time(),
+            'timestamp': datetime.now(),
             'new_status': nuevo_estado
         }
         
