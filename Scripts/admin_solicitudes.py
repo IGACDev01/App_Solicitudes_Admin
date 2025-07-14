@@ -436,10 +436,18 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
         comentarios_actuales = solicitud.get('comentarios_admin', '')
         
         if comentarios_actuales and comentarios_actuales.strip():
-            st.markdown("**💬 Historial de Comentarios**")
-            comentarios_formateados = formatear_comentarios_admin_display(comentarios_actuales)
-            with st.expander("Ver comentarios previos", expanded=False):
-                st.markdown(comentarios_formateados)
+            st.markdown("**💬 Historial de Comentarios Administrativos**")
+            
+            if '[' in comentarios_actuales and ']:' in comentarios_actuales:
+                comentarios_formateados = formatear_comentarios_admin_display(comentarios_actuales)
+                comentarios_clean = clean_html_content(comentarios_actuales)
+                num_comentarios = len([c for c in comentarios_clean.split('\n\n') if c.strip()])
+                
+                with st.expander(f"Ver {num_comentarios} comentario(s) previo(s)", expanded=False):
+                    st.markdown(comentarios_formateados)
+            else:
+                comentario_limpio = clean_html_content(comentarios_actuales)
+                st.info(f"**Comentario previo:** {comentario_limpio}")
         else:
             st.markdown("**💬 Sin comentarios previos**")
         
