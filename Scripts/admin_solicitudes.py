@@ -360,9 +360,9 @@ def mostrar_lista_solicitudes_admin_improved(data_manager, df, proceso):
         mostrar_solicitud_admin_improved(data_manager, solicitud, proceso)
         
 def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
-    """Improved version of mostrar_solicitud_admin with better UI state management"""
+    """Simplified version with cleaner UI"""
     
-    # Determinar color y emoji según estado y prioridad
+    # Determine color and emoji
     prioridad = solicitud.get('prioridad', 'Media')
     estado = solicitud['estado']
     
@@ -375,41 +375,33 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
     else:
         emoji = "📄"
     
-    # Check if this request was recently updated
+    # Check for recent updates
     recently_updated_key = f'recently_updated_{solicitud["id_solicitud"]}'
     recently_updated = st.session_state.get(recently_updated_key, None)
     
-    # Determine if expander should be expanded
     expanded = False
     status_indicator = ""
     
     if recently_updated:
-        # Check if update was within last 30 seconds
         time_diff = datetime.now() - recently_updated['timestamp']
         if time_diff.total_seconds() < 30:
             expanded = True
             status_indicator = f" ✨ (Actualizado: {recently_updated['new_status']})"
         else:
-            # Clear old update flag
             del st.session_state[recently_updated_key]
     
-    # Título del expander
+    # Expander title
     titulo = f"{emoji} {solicitud['id_solicitud']} - {solicitud['nombre_solicitante']} ({estado}){status_indicator}"
     if prioridad != 'Media':
         titulo += f" - {prioridad}"
     
     with st.expander(titulo, expanded=expanded):
         
-        # Clear the visual indicator after showing
+        # Show update success message briefly
         if recently_updated and status_indicator:
-            # Clear after a few seconds using a placeholder
-            placeholder = st.empty()
-            placeholder.success(f"✅ Solicitud actualizada correctamente a: {recently_updated['new_status']}")
-            
-        # Rest of the expander content remains the same...
-        # [Include all the existing content from the original function]
+            st.success(f"✅ Actualizada a: {recently_updated['new_status']}")
         
-        # Información de la solicitud
+        # Basic information
         col1, col2 = st.columns(2)
         
         with col1:
@@ -427,14 +419,10 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
                 if fecha_solicitud:
                     fecha_str = fecha_solicitud.strftime('%d/%m/%Y %H:%M')
                     st.write(f"**Fecha:** {fecha_str}")
-                else:
-                    st.write("**Fecha:** No disponible")
         
         with col2:
             st.write("**📝 Descripción**")
-            descripcion_original = solicitud.get('descripcion', '')
-            descripcion_limpia = clean_html_content(descripcion_original)
-            
+            descripcion_limpia = clean_html_content(solicitud.get('descripcion', ''))
             st.text_area(
                 "Descripción:",
                 value=descripcion_limpia,
@@ -443,37 +431,29 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
                 key=f"desc_{solicitud['id_solicitud']}"
             )
         
-        # Display comment history
+        # Comments history
         st.markdown("---")
         comentarios_actuales = solicitud.get('comentarios_admin', '')
         
         if comentarios_actuales and comentarios_actuales.strip():
-            st.markdown("**💬 Historial de Comentarios Administrativos**")
-            
-            if '[' in comentarios_actuales and ']:' in comentarios_actuales:
-                comentarios_formateados = formatear_comentarios_admin_display(comentarios_actuales)
-                comentarios_clean = clean_html_content(comentarios_actuales)
-                num_comentarios = len([c for c in comentarios_clean.split('\n\n') if c.strip()])
-                
-                with st.expander(f"Ver {num_comentarios} comentario(s) previo(s)", expanded=False):
-                    st.markdown(comentarios_formateados)
-            else:
-                comentario_limpio = clean_html_content(comentarios_actuales)
-                st.info(f"**Comentario previo:** {comentario_limpio}")
+            st.markdown("**💬 Historial de Comentarios**")
+            comentarios_formateados = formatear_comentarios_admin_display(comentarios_actuales)
+            with st.expander("Ver comentarios previos", expanded=False):
+                st.markdown(comentarios_formateados)
         else:
-            st.markdown("**💬 Comentarios Administrativos**")
-            st.info("Sin comentarios previos")
+            st.markdown("**💬 Sin comentarios previos**")
         
-        # File management section
+        # Files section
         st.markdown("---")
-        st.markdown("**📎 Archivos de la Solicitud**")
+        st.markdown("**📎 Archivos**")
         mostrar_archivos_adjuntos_admin(data_manager, solicitud['id_solicitud'])
         
         st.markdown("---")
         
-        # Management form - USING THE NEW SIMPLIFIED FUNCTION
+        # Simplified management form
         with st.form(f"manage_{solicitud['id_solicitud']}"):
-            col1, col2, col3 = st.columns(3)
+            
+            col1, col2 = st.columns(2)
             
             with col1:
                 nuevo_estado = st.selectbox(
@@ -487,51 +467,37 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
                 nueva_prioridad = st.selectbox(
                     "Prioridad:",
                     options=["Sin asignar", "Alta", "Media", "Baja"],
-                    index=["Sin asignar", "Alta", "Media", "Baja"].index(prioridad_actual) if prioridad_actual in ["Sin asignar", "Alta", "Media", "Baja"] else 0,
+                    index=["Sin asignar", "Alta", "Media", "Baja"].index(prioridad_actual) if prioridad_actual in ["Sin asignar", "Alta", "Media", "Baja"] else 2,
                     key=f"prioridad_{solicitud['id_solicitud']}"
                 )
-            
-            with col2:
+                
                 responsable = st.text_input(
                     "Responsable:",
                     value=solicitud.get('responsable_asignado', ''),
                     key=f"responsable_{solicitud['id_solicitud']}"
                 )
+            
+            with col2:
+                nuevo_comentario = st.text_area(
+                    "Nuevo comentario:",
+                    placeholder="Escriba aquí el nuevo comentario...",
+                    height=100,
+                    key=f"comentarios_{solicitud['id_solicitud']}"
+                )
                 
                 email_responsable = st.text_input(
                     "Email responsable:",
-                    value="",
                     placeholder="responsable@igac.gov.co",
                     key=f"email_resp_{solicitud['id_solicitud']}"
                 )
             
-            with col3:
-                nuevo_comentario = st.text_area(
-                    "Agregar nuevo comentario:",
-                    placeholder="Escriba aquí el nuevo comentario...",
-                    height=100,
-                    key=f"comentarios_{solicitud['id_solicitud']}",
-                    help="Este comentario se agregará al historial con fecha y hora automáticas"
-                )
-            
-            # File upload section in form
-            st.markdown("**📎 Subir Archivos Adicionales**")
+            # File upload
             new_files = st.file_uploader(
-                "Seleccionar archivos para subir:",
+                "Subir archivos:",
                 accept_multiple_files=True,
                 type=['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'jpg', 'jpeg', 'png', 'zip'],
-                help="Máximo 10MB por archivo. Se guardarán como attachments en SharePoint.",
                 key=f"admin_files_{solicitud['id_solicitud']}"
             )
-            
-            if new_files:
-                st.info(f"📎 {len(new_files)} archivo(s) seleccionado(s) para subir")
-                for file in new_files:
-                    file_size_mb = file.size / (1024 * 1024)
-                    if file_size_mb > 10:
-                        st.error(f"❌ {file.name} es muy grande ({file_size_mb:.1f}MB)")
-                    else:
-                        st.success(f"✅ {file.name} ({file_size_mb:.1f}MB)")
             
             # Notification options
             col1, col2 = st.columns(2)
@@ -545,7 +511,7 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
             with col2:
                 notificar_responsable = st.checkbox(
                     "📧 Notificar al responsable",
-                    value=False,
+                    value=False if not email_responsable else True,
                     key=f"notify_resp_{solicitud['id_solicitud']}"
                 )
             
@@ -556,14 +522,14 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
                 use_container_width=True
             )
             
-            # Process update with simplified function
+            # Process update
             if actualizar:
                 procesar_actualizacion_sharepoint_simplified(
                     data_manager, solicitud, nuevo_estado, nueva_prioridad, 
                     responsable, email_responsable, nuevo_comentario,
                     notificar_solicitante, notificar_responsable, new_files
                 )
-
+                
 def mostrar_archivos_adjuntos_admin(data_manager, id_solicitud):
     """Mostrar archivos adjuntos con layout mejorado desde seguimiento - SAFELY"""
     
@@ -624,45 +590,58 @@ def mostrar_archivos_adjuntos_admin(data_manager, id_solicitud):
 def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_estado, nueva_prioridad, 
                                                 responsable, email_responsable, nuevo_comentario,
                                                 notificar_solicitante, notificar_responsable, new_files=None):
-    """Simplified and reliable update process - No forced rerun"""
+    """Simplified and reliable update process"""
     
     try:
-        # Step 1: Show immediate feedback
-        with st.status("🔄 Procesando actualización...", expanded=False) as status:
-            
-            # Prepare comments
-            status.write("💬 Preparando comentarios...")
-            comentarios_actuales = solicitud.get('comentarios_admin', '')
-            
-            if nuevo_comentario and nuevo_comentario.strip():
-                autor = responsable or st.session_state.get('admin_usuario', 'Admin')
+        # Track what actually changed
+        changes = {}
+        
+        # Step 1: Check what changed
+        if nuevo_estado != solicitud['estado']:
+            changes['estado'] = {'old': solicitud['estado'], 'new': nuevo_estado}
+        
+        if nueva_prioridad != solicitud.get('prioridad', 'Media'):
+            changes['prioridad'] = {'old': solicitud.get('prioridad', 'Media'), 'new': nueva_prioridad}
+        
+        if responsable and responsable != solicitud.get('responsable_asignado', ''):
+            changes['responsable'] = {'old': solicitud.get('responsable_asignado', ''), 'new': responsable}
+        
+        if nuevo_comentario and nuevo_comentario.strip():
+            changes['comentario'] = {'new': nuevo_comentario.strip()}
+        
+        # Step 2: Prepare comments with automatic status change if needed
+        comentarios_actuales = solicitud.get('comentarios_admin', '')
+        
+        if nuevo_comentario and nuevo_comentario.strip():
+            autor = responsable or st.session_state.get('admin_usuario', 'Admin')
+            comentarios_finales = agregar_comentario_admin(
+                comentarios_actuales, 
+                nuevo_comentario.strip(), 
+                autor
+            )
+        else:
+            comentarios_finales = comentarios_actuales
+            # Add automatic comment for status changes without manual comment
+            if 'estado' in changes:
+                autor = st.session_state.get('admin_usuario', 'Admin')
+                comentario_automatico = f"Estado cambiado de '{changes['estado']['old']}' a '{changes['estado']['new']}'"
                 comentarios_finales = agregar_comentario_admin(
                     comentarios_actuales, 
-                    nuevo_comentario.strip(), 
-                    autor
+                    comentario_automatico, 
+                    f"{autor} (Sistema)"
                 )
-            else:
-                comentarios_finales = comentarios_actuales
-                if nuevo_estado != solicitud['estado'] and not nuevo_comentario:
-                    autor = st.session_state.get('admin_usuario', 'Admin')
-                    comentario_automatico = f"Estado cambiado de '{solicitud['estado']}' a '{nuevo_estado}'"
-                    comentarios_finales = agregar_comentario_admin(
-                        comentarios_actuales, 
-                        comentario_automatico, 
-                        f"{autor} (Sistema)"
-                    )
+        
+        # Step 3: Update in SharePoint (single transaction)
+        with st.spinner("🔄 Actualizando solicitud..."):
             
             # Update priority if changed
-            if nueva_prioridad != solicitud.get('prioridad', 'Media'):
-                status.write(f"🎯 Actualizando prioridad a '{nueva_prioridad}'...")
+            if 'prioridad' in changes:
                 success_priority = data_manager.update_request_priority(solicitud['id_solicitud'], nueva_prioridad)
                 if not success_priority:
-                    status.update(label="❌ Error al actualizar prioridad", state="error")
                     st.error("❌ Error al actualizar prioridad")
                     return False
             
             # Update status and comments
-            status.write(f"📝 Actualizando estado a '{nuevo_estado}'...")
             success_status = data_manager.update_request_status(
                 solicitud['id_solicitud'],
                 nuevo_estado,
@@ -671,17 +650,12 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
             )
             
             if not success_status:
-                status.update(label="❌ Error al actualizar la solicitud", state="error")
                 st.error("❌ Error al actualizar la solicitud")
                 return False
             
-            # Send notifications
-            email_sent = False
+            # Handle file uploads
             files_uploaded = []
-            
-            # Handle file uploads first
             if new_files:
-                status.write(f"📎 Subiendo {len(new_files)} archivo(s)...")
                 for uploaded_file in new_files:
                     if uploaded_file.size <= 10 * 1024 * 1024:  # 10MB limit
                         try:
@@ -691,80 +665,61 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
                             )
                             if success:
                                 files_uploaded.append(uploaded_file.name)
-                                status.write(f"✅ {uploaded_file.name} subido")
-                            else:
-                                status.write(f"⚠️ Error subiendo {uploaded_file.name}")
-                        except Exception as file_error:
-                            status.write(f"⚠️ Error con {uploaded_file.name}: {file_error}")
-                    else:
-                        status.write(f"❌ {uploaded_file.name} muy grande (>10MB)")
+                        except Exception:
+                            continue  # Skip failed uploads
             
-            if notificar_solicitante:
-                status.write("📧 Enviando notificación...")
-                try:
-                    email_manager = EmailManager()
-                    solicitud_data = {
-                        'id_solicitud': solicitud['id_solicitud'],
-                        'tipo_solicitud': solicitud['tipo_solicitud'],
-                        'email_solicitante': solicitud['email_solicitante'],
-                        'fecha_solicitud': solicitud.get('fecha_solicitud'),
-                        'area': solicitud.get('area', 'N/A'),
-                        'proceso': solicitud.get('proceso', 'N/A')
-                    }
-                    
-                    comentario_para_usuario = nuevo_comentario.strip() if nuevo_comentario and nuevo_comentario.strip() else f"Estado actualizado a: {nuevo_estado}"
-                    
-                    # Add file info to user notification if files were uploaded
-                    if files_uploaded:
-                        comentario_para_usuario += f"\n\nArchivos adjuntos: {', '.join(files_uploaded)}"
-                    
-                    # Send with file attachment if single file was uploaded
-                    if files_uploaded and len(files_uploaded) == 1:
-                        # For single file, send with attachment
-                        file_name = files_uploaded[0]
-                        # Get the file data from the most recent upload
-                        for uploaded_file in new_files:
-                            if uploaded_file.name == file_name:
-                                uploaded_file.seek(0)  # Reset file pointer
-                                file_data = uploaded_file.read()
-                                
-                                email_sent = email_manager.send_status_update_with_attachment(
-                                    solicitud_data, nuevo_estado, comentario_para_usuario,
-                                    file_data, file_name
-                                )
-                                break
-                        else:
-                            # Fallback to regular email if file not found
-                            email_sent = email_manager.send_status_update_notification(
-                                solicitud_data, nuevo_estado, comentario_para_usuario
-                            )
-                    else:
-                        # Regular email for no files or multiple files
-                        email_sent = email_manager.send_status_update_notification(
-                            solicitud_data, nuevo_estado, comentario_para_usuario
-                        )
-                    
-                    if email_sent:
-                        status.write("✅ Notificación enviada")
-                    else:
-                        status.write("⚠️ Error en notificación")
-                        
-                except Exception as e:
-                    status.write(f"⚠️ Error enviando notificación: {e}")
-                    print(f"Email notification error: {e}")
-            
-            # Reload data silently
-            status.write("🔄 Actualizando datos...")
-            data_manager.load_data(force_reload=True)
-            
-            # Update successful
-            status.update(label="✅ Solicitud actualizada exitosamente", state="complete")
+            if files_uploaded:
+                changes['archivos'] = {'new': files_uploaded}
         
-        # Show summary without blocking UI
-        show_update_summary(solicitud, nuevo_estado, nueva_prioridad, responsable, 
-                          nuevo_comentario, email_sent, notificar_responsable, email_responsable, files_uploaded)
+        # Step 4: Send notifications only if requested and changes occurred
+        email_sent = False
+        if notificar_solicitante and changes:
+            try:
+                from email_manager import EmailManager
+                email_manager = EmailManager()
+                
+                solicitud_data = {
+                    'id_solicitud': solicitud['id_solicitud'],
+                    'tipo_solicitud': solicitud['tipo_solicitud'],
+                    'email_solicitante': solicitud['email_solicitante'],
+                    'fecha_solicitud': solicitud.get('fecha_solicitud'),
+                    'area': solicitud.get('area', 'N/A'),
+                    'proceso': solicitud.get('proceso', 'N/A')
+                }
+                
+                # Send notification with only changed fields
+                email_sent = email_manager.send_status_update_notification_changes_only(
+                    solicitud_data, changes, responsable, email_responsable
+                )
+                
+            except Exception as e:
+                print(f"Email notification error: {e}")
         
-        # Mark this request as recently updated for UI feedback
+        # Step 5: Reload data and show success
+        data_manager.load_data(force_reload=True)
+        
+        # Show clean success message
+        st.success(f"✅ Solicitud {solicitud['id_solicitud']} actualizada correctamente")
+        
+        if changes:
+            changes_text = []
+            if 'estado' in changes:
+                changes_text.append(f"Estado: {changes['estado']['new']}")
+            if 'prioridad' in changes:
+                changes_text.append(f"Prioridad: {changes['prioridad']['new']}")
+            if 'responsable' in changes:
+                changes_text.append(f"Responsable: {changes['responsable']['new']}")
+            if 'comentario' in changes:
+                changes_text.append("Nuevo comentario agregado")
+            if 'archivos' in changes:
+                changes_text.append(f"{len(changes['archivos']['new'])} archivo(s) subido(s)")
+            
+            if email_sent:
+                changes_text.append("Notificación enviada")
+            
+            st.info("🔄 Cambios: " + " | ".join(changes_text))
+        
+        # Mark for UI feedback
         st.session_state[f'recently_updated_{solicitud["id_solicitud"]}'] = {
             'timestamp': datetime.now(),
             'new_status': nuevo_estado
@@ -774,9 +729,8 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
             
     except Exception as e:
         st.error(f"❌ Error al procesar actualización: {str(e)}")
-        print(f"Error details: {e}")
         return False
-
+    
 def show_update_summary(solicitud, nuevo_estado, nueva_prioridad, responsable, 
                        nuevo_comentario, email_sent, notificar_responsable, email_responsable, files_uploaded=None):
     """Show update summary in a clean way"""
