@@ -8,7 +8,6 @@ from admin_solicitudes import mostrar_tab_admin
 # Page configuration
 st.set_page_config(
     page_title="Sistema de Gestión de Solicitudes",
-    page_icon="📋",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -17,7 +16,7 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main-header {
-        background: linear-gradient(90deg, #1f77b4, #17becf);
+        background: #0765a7;
         padding: 1rem;
         border-radius: 10px;
         margin-bottom: 2rem;
@@ -25,10 +24,10 @@ st.markdown("""
         text-align: center;
     }
     .sharepoint-status {
-        background: #f0f8ff;
+        background: #0765a7;
         padding: 10px;
         border-radius: 5px;
-        border-left: 4px solid #1f77b4;
+        border-left: 4px solid #0765a7;
         margin-bottom: 20px;
     }
     /* ADD THIS NEW CSS CLASS */
@@ -37,7 +36,7 @@ st.markdown("""
         left: 0;
         bottom: 0;
         width: 100%;
-        background-color: #1f77b4;
+        background-color: #0765a7;
         color: white;
         text-align: center;
         padding: 8px 0;
@@ -46,7 +45,7 @@ st.markdown("""
         box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
     }
     .footer a {
-        color: #17becf;
+        color: #0765a7;
         text-decoration: none;
     }
     .footer a:hover {

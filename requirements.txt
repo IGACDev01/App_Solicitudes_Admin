@@ -1,6 +1,9 @@
 # Core Streamlit and web framework
 streamlit>=1.28.0
 
+# Time zone handling
+pytz==2023.3
+
 # Data manipulation and analysis
 pandas>=1.5.0
 numpy>=1.24.0

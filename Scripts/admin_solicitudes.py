@@ -2,9 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 from email_manager import EmailManager
-import plotly.express as px
-import plotly.graph_objects as go
-import time
+from timezone_utils import get_colombia_time, get_colombia_time_string, format_colombia_datetime, convert_to_colombia_time
 
 # Credenciales por proceso
 ADMIN_CREDENTIALS = {
@@ -23,14 +21,13 @@ ADMIN_CREDENTIALS = {
 
 def agregar_comentario_admin(comentario_actual, nuevo_comentario, responsable):
     """Add a new admin comment with timestamp and author"""
-    timestamp = datetime.now().strftime('%d/%m/%Y %H:%M')
+    # Use Colombia timezone
+    timestamp = get_colombia_time_string('%d/%m/%Y %H:%M')
     nuevo_entry = f"[{timestamp} - {responsable}]: {nuevo_comentario}"
     
     if comentario_actual and comentario_actual.strip():
-        # Append to existing comments
         return f"{comentario_actual}\n\n{nuevo_entry}"
     else:
-        # First comment
         return nuevo_entry
 
 def clean_html_content(content):
@@ -220,7 +217,7 @@ def normalize_datetime(dt):
     return dt
 
 def mostrar_mini_dashboard(df, proceso):
-    """Mini dashboard del proceso - UPDATED with timezone handling"""
+    """Mini dashboard del proceso - FIXED with Colombia timezone handling"""
     st.subheader(f"📊 Dashboard - {proceso}")
     
     # Métricas principales
@@ -244,43 +241,25 @@ def mostrar_mini_dashboard(df, proceso):
     
     # Alertas - FIXED timezone comparison
     if pendientes > 0:
-        fecha_limite = datetime.now() - timedelta(days=7)
+        # Use Colombia timezone for comparison
+        fecha_limite = get_colombia_time() - timedelta(days=7)
         
-        # Normalize datetime columns for comparison
+        # Convert fecha_solicitud to Colombia timezone for comparison
         df_normalized = df.copy()
         if 'fecha_solicitud' in df_normalized.columns:
-            df_normalized['fecha_solicitud'] = df_normalized['fecha_solicitud'].apply(normalize_datetime)
+            # Convert to Colombia timezone and remove timezone for comparison
+            df_normalized['fecha_solicitud_colombia'] = df_normalized['fecha_solicitud'].apply(
+                lambda x: convert_to_colombia_time(x).replace(tzinfo=None) if pd.notna(x) else None
+            )
             
             # Filter for old pending requests
             antiguas = df_normalized[
                 (df_normalized['estado'] == 'Pendiente') & 
-                (df_normalized['fecha_solicitud'] < fecha_limite)
+                (df_normalized['fecha_solicitud_colombia'] < fecha_limite.replace(tzinfo=None))
             ]
             
             if not antiguas.empty:
                 st.warning(f"⚠️ {len(antiguas)} solicitudes pendientes por más de 7 días")
-    
-    # Gráfico de estados
-    if total > 0:
-        estados_data = df['estado'].value_counts()
-        
-        fig = go.Figure(data=[
-            go.Pie(
-                labels=estados_data.index,
-                values=estados_data.values,
-                hole=0.4,
-                marker=dict(colors=['#FFA726', '#42A5F5', '#66BB6A', '#EF5350'])
-            )
-        ])
-        
-        fig.update_layout(
-            title="Distribución por Estado",
-            height=300,
-            showlegend=True,
-            margin=dict(t=50, b=0, l=0, r=0)
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
 
 def mostrar_filtros_busqueda(df):
     """Filtros y búsqueda"""
@@ -423,13 +402,11 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
             if 'territorial' in solicitud and pd.notna(solicitud['territorial']):
                 st.write(f"**Territorial:** {solicitud['territorial']}")
             
-            if 'fecha_solicitud' in solicitud:
-                fecha_solicitud = normalize_datetime(solicitud['fecha_solicitud'])
-                if fecha_solicitud:
-                    fecha_str = fecha_solicitud.strftime('%d/%m/%Y %H:%M')
-                    st.write(f"**Fecha:** {fecha_str}")
-                else:
-                    st.write("**Fecha:** No disponible")
+            if 'fecha_solicitud' in solicitud and pd.notna(solicitud['fecha_solicitud']):
+                fecha_str = format_colombia_datetime(solicitud['fecha_solicitud'], '%d/%m/%Y %H:%M')
+                st.write(f"**Fecha:** {fecha_str}")
+            else:
+                st.write("**Fecha:** No disponible")
         
         with col2:
             st.write("**📝 Descripción**")
@@ -767,7 +744,7 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
         
         # Mark this request as recently updated for UI feedback
         st.session_state[f'recently_updated_{solicitud["id_solicitud"]}'] = {
-            'timestamp': datetime.now(),
+            'timestamp': get_colombia_time(),
             'new_status': nuevo_estado
         }
         
