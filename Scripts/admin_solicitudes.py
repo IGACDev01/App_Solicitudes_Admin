@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 from email_manager import EmailManager
-from timezone_utils import get_colombia_time, get_colombia_time_string, format_colombia_datetime, convert_to_colombia_time
+from timezone_utils import get_colombia_time, get_colombia_time_string, format_colombia_datetime, normalize_datetime_for_comparison
 
 # Credenciales por proceso
 ADMIN_CREDENTIALS = {
@@ -217,7 +217,7 @@ def normalize_datetime(dt):
     return dt
 
 def mostrar_mini_dashboard(df, proceso):
-    """Mini dashboard del proceso - FIXED with Colombia timezone handling"""
+    """Mini dashboard del proceso"""
     st.subheader(f"📊 Dashboard - {proceso}")
     
     # Métricas principales
@@ -241,26 +241,97 @@ def mostrar_mini_dashboard(df, proceso):
     
     # Alertas - FIXED timezone comparison
     if pendientes > 0:
-        # Use Colombia timezone for comparison
-        fecha_limite = get_colombia_time() - timedelta(days=7)
+        # Use Colombia timezone for comparison - get as timezone-naive
+        fecha_limite = get_colombia_time().replace(tzinfo=None) - timedelta(days=7)
         
-        # Convert fecha_solicitud to Colombia timezone for comparison
+        # Filter for old pending requests using normalized dates
         df_normalized = df.copy()
         if 'fecha_solicitud' in df_normalized.columns:
-            # Convert to Colombia timezone and remove timezone for comparison
+            # Normalize all dates to Colombia timezone (timezone-naive)
             df_normalized['fecha_solicitud_colombia'] = df_normalized['fecha_solicitud'].apply(
-                lambda x: convert_to_colombia_time(x).replace(tzinfo=None) if pd.notna(x) else None
+                lambda x: normalize_datetime_for_comparison(x) if pd.notna(x) else None
             )
             
             # Filter for old pending requests
             antiguas = df_normalized[
                 (df_normalized['estado'] == 'Pendiente') & 
-                (df_normalized['fecha_solicitud_colombia'] < fecha_limite.replace(tzinfo=None))
+                (df_normalized['fecha_solicitud_colombia'] < fecha_limite) &
+                (df_normalized['fecha_solicitud_colombia'].notna())
             ]
             
             if not antiguas.empty:
                 st.warning(f"⚠️ {len(antiguas)} solicitudes pendientes por más de 7 días")
 
+def mostrar_alertas_sistema(data_manager):
+    """Mostrar alertas del sistema"""
+    df = data_manager.get_all_requests()
+    
+    if df.empty:
+        return
+    
+    alertas = []
+    
+    # Solicitudes antiguas sin actualizar (>7 días) - FIXED datetime handling
+    fecha_limite = get_colombia_time().replace(tzinfo=None) - timedelta(days=7)
+    
+    if 'fecha_actualizacion' in df.columns:
+        try:
+            # Create normalized copy for comparison
+            df_copy = df.copy()
+            df_copy['fecha_actualizacion_colombia'] = df_copy['fecha_actualizacion'].apply(
+                lambda x: normalize_datetime_for_comparison(x) if pd.notna(x) else None
+            )
+            
+            solicitudes_antiguas = df_copy[
+                (df_copy['fecha_actualizacion_colombia'] < fecha_limite) & 
+                (df_copy['estado'] != 'Completado') &
+                (df_copy['fecha_actualizacion_colombia'].notna())
+            ]
+            
+            if not solicitudes_antiguas.empty:
+                alertas.append({
+                    'tipo': 'warning',
+                    'titulo': '⚠️ Solicitudes sin actualizar',
+                    'mensaje': f'{len(solicitudes_antiguas)} solicitudes llevan más de 7 días sin actualización',
+                    'detalle': list(solicitudes_antiguas['id_solicitud'].head(5))
+                })
+        except Exception as e:
+            print(f"Error checking old requests: {e}")
+    
+    # Solicitudes de alta prioridad pendientes
+    if 'prioridad' in df.columns:
+        alta_prioridad_pendientes = df[
+            (df['prioridad'] == 'Alta') & 
+            (df['estado'] == 'Pendiente')
+        ]
+        if not alta_prioridad_pendientes.empty:
+            alertas.append({
+                'tipo': 'error',
+                'titulo': '🔴 Alta prioridad pendiente',
+                'mensaje': f'{len(alta_prioridad_pendientes)} solicitudes de alta prioridad sin atender',
+                'detalle': list(alta_prioridad_pendientes['id_solicitud'].head(5))
+            })
+    
+    # Mostrar alertas
+    if alertas:
+        st.subheader("🚨 Alertas del Sistema")
+        for alerta in alertas:
+            if alerta['tipo'] == 'warning':
+                st.warning(f"**{alerta['titulo']}**: {alerta['mensaje']}")
+            elif alerta['tipo'] == 'error':
+                st.error(f"**{alerta['titulo']}**: {alerta['mensaje']}")
+
+def agregar_comentario_admin(comentario_actual, nuevo_comentario, responsable):
+    """Add a new admin comment with timestamp and author"""
+    # Use Colombia timezone with proper formatting
+    timestamp = get_colombia_time_string('%d/%m/%Y %H:%M')
+    nuevo_entry = f"[{timestamp} - {responsable}]: {nuevo_comentario}"
+    
+    if comentario_actual and comentario_actual.strip():
+        return f"{comentario_actual}\n\n{nuevo_entry}"
+    else:
+        return nuevo_entry
+    
 def mostrar_filtros_busqueda(df):
     """Filtros y búsqueda"""
     st.subheader("🔍 Filtros y Búsqueda")

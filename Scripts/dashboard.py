@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-from timezone_utils import get_colombia_time, get_colombia_time_string, format_colombia_datetime, convert_to_colombia_time
+from timezone_utils import get_colombia_time, get_colombia_time_string, format_colombia_datetime, convert_to_colombia_time, normalize_datetime_for_comparison
 
 
 def mostrar_login_dashboard():
@@ -54,29 +54,29 @@ def formatear_tiempo_dashboard(dias):
         return f"{dias:.1f} días"
 
 def safe_datetime_operation(dt_series, operation='max'):
-    """Safely perform datetime operations on Series"""
+    """Safely perform datetime operations on Series - FIXED"""
     try:
         if dt_series.empty or dt_series.isna().all():
             return None
         
-        # Convert to datetime if needed and remove timezone info
-        dt_clean = pd.to_datetime(dt_series, errors='coerce')
-        dt_clean = dt_clean.dt.tz_localize(None) if dt_clean.dt.tz is not None else dt_clean
-        dt_clean = dt_clean.dropna()
+        # Normalize all datetimes to Colombia timezone (timezone-naive)
+        dt_normalized = dt_series.apply(
+            lambda x: normalize_datetime_for_comparison(x) if pd.notna(x) else None
+        ).dropna()
         
-        if dt_clean.empty:
+        if dt_normalized.empty:
             return None
             
         if operation == 'max':
-            return dt_clean.max()
+            return dt_normalized.max()
         elif operation == 'min':
-            return dt_clean.min()
+            return dt_normalized.min()
         else:
-            return dt_clean
+            return dt_normalized
     except Exception as e:
         print(f"Error in datetime operation: {e}")
         return None
-
+    
 def mostrar_tab_dashboard(data_manager):
     """Mostrar el tab del dashboard - SharePoint optimized with simple login"""
     
@@ -275,18 +275,19 @@ def mostrar_dataframe_visualizer(data_manager):
     if prioridad_filtro != "Todas" and 'prioridad' in df_filtrado.columns:
         df_filtrado = df_filtrado[df_filtrado['prioridad'] == prioridad_filtro]
     
-    # Apply date filters - FIXED
+    # Apply date filters
     if fecha_desde and fecha_hasta and 'fecha_solicitud' in df_filtrado.columns:
-        # Convert all dates to Colombia timezone for filtering
-        df_filtrado['fecha_solicitud_colombia'] = df_filtrado['fecha_solicitud'].apply(
-            lambda x: convert_to_colombia_time(x).date() if pd.notna(x) else None
+        # Normalize all dates to Colombia timezone for filtering
+        df_filtrado['fecha_solicitud_colombia_date'] = df_filtrado['fecha_solicitud'].apply(
+            lambda x: normalize_datetime_for_comparison(x).date() if normalize_datetime_for_comparison(x) else None
         )
         
         df_filtrado = df_filtrado[
-            (df_filtrado['fecha_solicitud_colombia'] >= fecha_desde) &
-            (df_filtrado['fecha_solicitud_colombia'] <= fecha_hasta)
+            (df_filtrado['fecha_solicitud_colombia_date'] >= fecha_desde) &
+            (df_filtrado['fecha_solicitud_colombia_date'] <= fecha_hasta) &
+            (df_filtrado['fecha_solicitud_colombia_date'].notna())
         ]
-        df_filtrado = df_filtrado.drop('fecha_solicitud_colombia', axis=1)
+        df_filtrado = df_filtrado.drop('fecha_solicitud_colombia_date', axis=1)
     
     # Apply text search
     if busqueda_texto:
@@ -889,11 +890,13 @@ def mostrar_analisis_temporal(data_manager):
         # Convert to Colombia timezone and create month column
         df_copy = df.copy()
         df_copy['fecha_solicitud_colombia'] = df_copy['fecha_solicitud'].apply(
-            lambda x: convert_to_colombia_time(x) if pd.notna(x) else None
+            lambda x: normalize_datetime_for_comparison(x) if pd.notna(x) else None
         )
         
         # Create month column
-        df_copy['mes_solicitud'] = df_copy['fecha_solicitud_colombia'].dt.to_period('M')
+        mask = df_copy['fecha_solicitud_colombia'].notna()
+        if mask.any():
+            df_copy.loc[mask, 'mes_solicitud'] = pd.to_datetime(df_copy.loc[mask, 'fecha_solicitud_colombia']).dt.to_period('M')
         
         # Selector para agrupar por estado o prioridad
         col1, col2 = st.columns([1, 3])
