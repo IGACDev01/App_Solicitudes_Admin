@@ -230,8 +230,8 @@ def mostrar_mini_dashboard(df, proceso):
         st.metric("📋 Total", total)
     
     with col2:
-        pendientes = len(df[df['estado'] == 'Pendiente'])
-        st.metric("🟡 Pendientes", pendientes)
+        asignadas = len(df[df['estado'] == 'Asignada'])
+        st.metric("🟡 Asignadas", asignadas)
     
     with col3:
         en_proceso = len(df[df['estado'] == 'En Proceso'])
@@ -241,8 +241,8 @@ def mostrar_mini_dashboard(df, proceso):
         completadas = len(df[df['estado'] == 'Completado'])
         st.metric("✅ Completadas", completadas)
     
-    # Alertas - FIXED timezone comparison
-    if pendientes > 0:
+    # Alertas
+    if asignadas > 0:
         fecha_limite = datetime.now() - timedelta(days=7)
         
         # Normalize datetime columns for comparison
@@ -252,12 +252,12 @@ def mostrar_mini_dashboard(df, proceso):
             
             # Filter for old pending requests
             antiguas = df_normalized[
-                (df_normalized['estado'] == 'Pendiente') & 
+                (df_normalized['estado'] == 'Asignada') & 
                 (df_normalized['fecha_solicitud'] < fecha_limite)
             ]
             
             if not antiguas.empty:
-                st.warning(f"⚠️ {len(antiguas)} solicitudes pendientes por más de 7 días")
+                st.warning(f"⚠️ {len(antiguas)} solicitudes Asignadas por más de 7 días")
     
     # Gráfico de estados
     if total > 0:
@@ -366,7 +366,7 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
     prioridad = solicitud.get('prioridad', 'Media')
     estado = solicitud['estado']
     
-    if prioridad == 'Alta' and estado == 'Pendiente':
+    if prioridad == 'Alta' and estado == 'Asignada':
         emoji = "🔴"
     elif estado == 'Completado':
         emoji = "✅"
@@ -466,8 +466,8 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
             with col1:
                 nuevo_estado = st.selectbox(
                     "Estado:",
-                    options=["Pendiente", "En Proceso", "Completado", "Cancelado"],
-                    index=["Pendiente", "En Proceso", "Completado", "Cancelado"].index(solicitud['estado']),
+                    options=["Asignada", "En Proceso", "Completado", "Cancelado"],
+                    index=["Asignada", "En Proceso", "Completado", "Cancelado"].index(solicitud['estado']),
                     key=f"estado_{solicitud['id_solicitud']}"
                 )
                 
