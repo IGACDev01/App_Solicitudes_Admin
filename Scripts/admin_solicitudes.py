@@ -380,26 +380,26 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
     recently_updated = st.session_state.get(recently_updated_key, None)
     
     expanded = False
-    status_indicator = ""
+    show_success = False
     
     if recently_updated:
         time_diff = datetime.now() - recently_updated['timestamp']
         if time_diff.total_seconds() < 30:
             expanded = True
-            status_indicator = f" ✨ (Actualizado: {recently_updated['new_status']})"
+            show_success = True
         else:
             del st.session_state[recently_updated_key]
     
     # Expander title
-    titulo = f"{emoji} {solicitud['id_solicitud']} - {solicitud['nombre_solicitante']} ({estado}){status_indicator}"
+    titulo = f"{emoji} {solicitud['id_solicitud']} - {solicitud['nombre_solicitante']} ({estado})"
     if prioridad != 'Media':
         titulo += f" - {prioridad}"
     
     with st.expander(titulo, expanded=expanded):
         
         # Show update success message briefly
-        if recently_updated and status_indicator:
-            st.success(f"✅ Actualizada a: {recently_updated['new_status']}")
+        if recently_updated and show_success:
+            st.success(f"✅ Solicitud Actualizada")
         
         # Basic information
         col1, col2 = st.columns(2)
@@ -486,11 +486,14 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
                 )
             
             with col2:
+                counter_key = f'comment_counter_{solicitud["id_solicitud"]}'
+                comment_counter = st.session_state.get(counter_key, 0)
+
                 nuevo_comentario = st.text_area(
                     "Nuevo comentario:",
                     placeholder="Escriba aquí el nuevo comentario...",
                     height=100,
-                    key=f"comentarios_{solicitud['id_solicitud']}"
+                    key=f"comentarios_{solicitud['id_solicitud']}_{comment_counter}"
                 )
                 
                 email_responsable = st.text_input(
@@ -733,17 +736,19 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
             'new_status': nuevo_estado
         }
         
-        # CLEAR ONLY THE COMMENT FIELD AFTER SUCCESSFUL UPDATE
-        comment_key = f"comentarios_{solicitud['id_solicitud']}"
-        if comment_key in st.session_state:
-            st.session_state[comment_key] = ""
+        # INCREMENT COMMENT COUNTER TO FORCE NEW WIDGET
+        if nuevo_comentario and nuevo_comentario.strip():
+            counter_key = f'comment_counter_{solicitud["id_solicitud"]}'
+            current_counter = st.session_state.get(counter_key, 0)
+            st.session_state[counter_key] = current_counter + 1
+            st.rerun()
         
         return True
             
     except Exception as e:
         st.error(f"❌ Error al procesar actualización: {str(e)}")
         return False
-    
+      
 def show_update_summary(solicitud, nuevo_estado, nueva_prioridad, responsable, 
                        nuevo_comentario, email_sent, notificar_responsable, email_responsable, files_uploaded=None):
     """Show update summary in a clean way"""
