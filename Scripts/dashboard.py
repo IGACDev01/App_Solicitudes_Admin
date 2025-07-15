@@ -123,6 +123,56 @@ def mostrar_tab_dashboard(data_manager):
         st.error("❌ Error de conexión con SharePoint Lists")
         return
     
+    st.markdown("---")
+    st.subheader("🔧 Filtros Globales")
+
+    col1, col2, col3 = st.columns([2, 2, 2])
+
+    with col1:
+        # Get unique areas
+        df_all = data_manager.get_all_requests()
+        areas_disponibles = ["Todas"] + sorted(df_all['area'].dropna().unique().tolist()) if not df_all.empty else ["Todas"]
+        
+        filtro_area_global = st.selectbox(
+            "Filtrar por Área:",
+            options=areas_disponibles,
+            key="filtro_area_global_dashboard"
+        )
+
+    with col2:
+        # Get unique processes
+        procesos_disponibles = ["Todos"] + sorted(df_all['proceso'].dropna().unique().tolist()) if not df_all.empty else ["Todos"]
+        
+        filtro_proceso_global = st.selectbox(
+            "Filtrar por Proceso:",
+            options=procesos_disponibles,
+            key="filtro_proceso_global_dashboard"
+        )
+
+    with col3:
+        # Clear filters button
+        if st.button("🔄 Limpiar Filtros", key="clear_global_filters"):
+            st.session_state.filtro_area_global_dashboard = "Todas"
+            st.session_state.filtro_proceso_global_dashboard = "Todos"
+            st.rerun()
+
+    # Apply global filters to data
+    df_filtrado_global = df_all.copy()
+    if filtro_area_global != "Todas":
+        df_filtrado_global = df_filtrado_global[df_filtrado_global['area'] == filtro_area_global]
+    if filtro_proceso_global != "Todos":
+        df_filtrado_global = df_filtrado_global[df_filtrado_global['proceso'] == filtro_proceso_global]
+
+    # Update data manager with filtered data for all subsequent operations
+    data_manager.df = df_filtrado_global
+
+    # Show filtered results
+    if not df_filtrado_global.empty:
+        st.info(f"📊 Mostrando {len(df_filtrado_global)} de {len(df_all)} solicitudes")
+    else:
+        st.warning("⚠️ No se encontraron solicitudes con los filtros aplicados")
+        return
+
     # Obtener resumen de datos
     resumen = data_manager.get_requests_summary()
     
