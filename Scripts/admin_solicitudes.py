@@ -486,17 +486,8 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
                 )
             
             with col2:
-                clear_flag_key = f'clear_comments_{solicitud["id_solicitud"]}'
-                if clear_flag_key in st.session_state and st.session_state[clear_flag_key]:
-                    comment_value = ""
-                    # Clear the flag
-                    del st.session_state[clear_flag_key]
-                else:
-                    comment_value = ""
-
                 nuevo_comentario = st.text_area(
                     "Nuevo comentario:",
-                    value=comment_value,
                     placeholder="Escriba aquí el nuevo comentario...",
                     height=100,
                     key=f"comentarios_{solicitud['id_solicitud']}"
@@ -742,10 +733,10 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
             'new_status': nuevo_estado
         }
         
-        # CLEAR COMMENTS BY SETTING FLAG AND RERUNNING
-        if nuevo_comentario and nuevo_comentario.strip():
-            st.session_state[f'clear_comments_{solicitud["id_solicitud"]}'] = True
-            st.rerun()
+        # CLEAR ONLY THE COMMENT FIELD AFTER SUCCESSFUL UPDATE
+        comment_key = f"comentarios_{solicitud['id_solicitud']}"
+        if comment_key in st.session_state:
+            st.session_state[comment_key] = ""
         
         return True
             
