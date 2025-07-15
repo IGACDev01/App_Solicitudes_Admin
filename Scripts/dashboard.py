@@ -165,13 +165,7 @@ def mostrar_tab_dashboard(data_manager):
     mostrar_grafico_tipos(resumen)
     
     # Tercera fila de gráficos
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        mostrar_grafico_areas(data_manager)
-    
-    with col2:
-        mostrar_grafico_procesos(data_manager)
+    mostrar_grafico_procesos(data_manager)
         
     # Cuarta fila de gráficos
     mostrar_grafico_territoriales(data_manager)
@@ -630,7 +624,9 @@ def mostrar_grafico_tipos(resumen):
                 margin=dict(t=50, b=0, l=0, r=0),
                 showlegend=False,
                 yaxis=dict(title=""),
-                xaxis=dict(title="Cantidad"),
+                xaxis=dict(title="Cantidad",
+                           tickmode='linear',
+                            dtick=1),
                 coloraxis_showscale=False
             )
             
@@ -651,7 +647,7 @@ def mostrar_grafico_prioridades(data_manager):
     
     if not df.empty and 'prioridad' in df.columns:
         # Definir el orden deseado
-        orden_prioridades = ['Sin asignar', 'Baja', 'Media', 'Alta']
+        orden_prioridades = ['Por definir', 'Baja', 'Media', 'Alta']
         
         # Obtener conteos y reindexar en el orden deseado
         prioridades_data = df['prioridad'].value_counts()
@@ -661,7 +657,7 @@ def mostrar_grafico_prioridades(data_manager):
             'Alta': '#d32f2f',
             'Media': '#f57c00',
             'Baja': '#388e3c',
-            'Sin asignar': '#9e9e9e'
+            'Por definir': '#9e9e9e'
         }
         
         fig = go.Figure(data=[
@@ -682,121 +678,19 @@ def mostrar_grafico_prioridades(data_manager):
                 categoryorder='array',
                 categoryarray=orden_prioridades
             ),
-            yaxis=dict(title="Cantidad")
+            yaxis=dict(title="Cantidad",
+                       tickmode='linear',
+                        dtick=1
+                       )
         )
         
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No hay datos disponibles")
 
-def mostrar_grafico_areas(data_manager):
-    """Mostrar análisis por área (nueva estructura)"""
-    st.subheader("🏢 Análisis por Área")
-    
-    df = data_manager.get_all_requests()
-    
-    if not df.empty and 'area' in df.columns:
-        # Obtener todas las áreas
-        areas_disponibles = df['area'].unique()
-        
-        # Crear DataFrame para el análisis
-        area_data = []
-        for area in areas_disponibles:
-            area_df = df[df['area'] == area]
-            
-            # Calcular tiempo promedio de resolución para esta área
-            completadas_area = area_df[area_df['estado'] == 'Completado']
-            tiempo_promedio_resolucion = 0
-            if not completadas_area.empty and 'tiempo_resolucion_dias' in completadas_area.columns:
-                tiempo_promedio_resolucion = completadas_area['tiempo_resolucion_dias'].mean()
-            
-            asignadas = len(area_df[area_df['estado'] == 'Asignada'])
-            en_proceso = len(area_df[area_df['estado'] == 'En Proceso'])
-            completadas = len(area_df[area_df['estado'] == 'Completado'])
-            canceladas = len(area_df[area_df['estado'] == 'Cancelado'])
-            total = len(area_df)
-            
-            area_data.append({
-                'Area': area,
-                'Asignadas': asignadas,
-                'En Proceso': en_proceso,
-                'Completadas': completadas,
-                'Canceladas': canceladas,
-                'Total': total,
-                'Tasa_Completadas': round((completadas / total * 100), 2),
-                'Tiempo_Resolucion': round(tiempo_promedio_resolucion, 2),
-                'Pct_Asignadas': round((asignadas / total * 100), 2),
-                'Pct_En_Proceso': round((en_proceso / total * 100), 2),
-                'Pct_Completadas': round((completadas / total * 100), 2),
-                'Pct_Canceladas': round((canceladas / total * 100), 2)
-            })
-        
-        df_analysis = pd.DataFrame(area_data)
-        
-        if not df_analysis.empty:
-            # Ordenar por total de solicitudes (de mayor a menor)
-            df_analysis = df_analysis.sort_values('Total', ascending=False)
-            
-            # Gráfico de barras apiladas por área
-            fig_bar = go.Figure()
-            
-            # Colores para cada estado
-            colores = {
-                'Completadas': '#66BB6A',
-                'En Proceso': '#42A5F5', 
-                'Asignadas': '#FFA726',
-                'Canceladas': '#EF5350'
-            }
-            
-            # Agregar barras para cada estado
-            estados = ['Completadas', 'En Proceso', 'Asignadas', 'Canceladas']
-            for estado in estados:
-                pct_col = f'Pct_{estado.replace(" ", "_")}'
-                fig_bar.add_trace(go.Bar(
-                    name=estado,
-                    x=df_analysis['Area'],
-                    y=df_analysis[estado],
-                    marker_color=colores[estado],
-                    hovertemplate='<b>%{x}</b><br>' + 
-                                estado + ': %{y}<br>' +
-                                'Porcentaje: %{customdata:.2f}%<br>' +
-                                'Total área: ' + df_analysis['Total'].astype(str) + '<br>' +
-                                '<extra></extra>',
-                    customdata=df_analysis[pct_col]
-                ))
-            
-            # Configuración del layout
-            fig_bar.update_layout(
-                title="Distribución de Estados por Área",
-                barmode='stack',
-                height=400,
-                margin=dict(t=50, b=0, l=0, r=0),
-                xaxis=dict(
-                    title="Área", 
-                    tickangle=45,
-                    categoryorder='array',
-                    categoryarray=df_analysis['Area'].tolist()
-                ),
-                yaxis=dict(title="Número de Solicitudes"),
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.02,
-                    xanchor="right",
-                    x=1
-                )
-            )
-            
-            st.plotly_chart(fig_bar, use_container_width=True)
-        else:
-            st.info("No hay datos disponibles")
-    else:
-        st.info("No hay datos disponibles por área")
-
 def mostrar_grafico_procesos(data_manager):
     """Mostrar análisis por proceso (nueva estructura)"""
-    st.subheader("📋 Análisis por Proceso")
-    
+  
     df = data_manager.get_all_requests()
     
     if not df.empty and 'proceso' in df.columns:
@@ -818,7 +712,10 @@ def mostrar_grafico_procesos(data_manager):
                 margin=dict(t=50, b=0, l=0, r=0),
                 showlegend=False,
                 yaxis=dict(title="Proceso"),
-                xaxis=dict(title="Cantidad de Solicitudes"),
+                xaxis=dict(title="Cantidad de Solicitudes",
+                           tickmode='linear',
+                           dtick=1
+                           ),
                 coloraxis_showscale=False
             )
             
@@ -838,8 +735,6 @@ def mostrar_grafico_procesos(data_manager):
 
 def mostrar_grafico_territoriales(data_manager):
     """Mostrar gráfico de solicitudes por territorial"""
-    st.subheader("🗾 Análisis por Territorial")
-    
     df = data_manager.get_all_requests()
     
     if not df.empty and 'territorial' in df.columns:
@@ -859,7 +754,9 @@ def mostrar_grafico_territoriales(data_manager):
             margin=dict(t=50, b=0, l=0, r=0),
             showlegend=False,
             yaxis=dict(title="Territorial"),
-            xaxis=dict(title="Cantidad de Solicitudes"),
+            xaxis=dict(title="Cantidad de Solicitudes",
+                       tickmode='linear',
+                        dtick=1),
             coloraxis_showscale=False
         )
         
@@ -946,7 +843,7 @@ def mostrar_analisis_temporal(data_manager):
                 'Alta': '#d32f2f',
                 'Media': '#f57c00',
                 'Baja': '#388e3c',
-                'Sin asignar': '#9e9e9e'
+                'Por definir': '#9e9e9e'
             }
             
             fig = px.bar(
@@ -967,7 +864,10 @@ def mostrar_analisis_temporal(data_manager):
             height=400,
             margin=dict(t=50, b=0, l=0, r=0),
             xaxis=dict(title="Mes"),
-            yaxis=dict(title="Número de Solicitudes"),
+            yaxis=dict(title="Número de Solicitudes",
+                       tickmode='linear', 
+                       dtick=1   
+                       ),
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
