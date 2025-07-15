@@ -758,3 +758,125 @@ class EmailManager:
         </body>
         </html>
         """
+    
+    def send_responsible_notification(self, datos_solicitud: Dict[str, Any], 
+                                    changes: Dict[str, Any], responsable: str = "", 
+                                    email_responsable: str = "") -> bool:
+        """Send notification to responsible person about request changes"""
+        if not self.email_enabled:
+            print(f"Responsible notification email to: {email_responsable}")
+            for change_type, change_data in changes.items():
+                print(f"- {change_type}: {change_data}")
+            return True
+        
+        try:
+            if not self.access_token:
+                self.access_token = self._get_access_token()
+            
+            if not self.access_token:
+                return False
+            
+            subject = f"📋 Asignación de Solicitud (ID: {datos_solicitud['id_solicitud']})"
+            html_body = self.get_responsible_notification_template(
+                datos_solicitud, changes, responsable, email_responsable
+            )
+            
+            return self._send_email_graph(email_responsable, subject, html_body)
+            
+        except Exception as e:
+            print(f"Responsible notification email error: {e}")
+            return False
+
+    def get_responsible_notification_template(self, datos: Dict[str, Any], 
+                                            changes: Dict[str, Any], responsable: str, 
+                                            email_responsable: str) -> str:
+        """HTML template for responsible person notification"""
+        
+        # Build changes section
+        changes_html = ""
+        
+        if 'estado' in changes:
+            estado_emoji = {
+                "Asignada": "🟡", "En Proceso": "🔵", 
+                "Completado": "✅", "Cancelado": "❌"
+            }
+            new_emoji = estado_emoji.get(changes['estado']['new'], '🔹')
+            changes_html += f"""
+            <div class="status-box">
+                <h3>📊 Estado Actual</h3>
+                <h2>{new_emoji} {changes['estado']['new']}</h2>
+            </div>
+            """
+        
+        if 'comentario' in changes:
+            changes_html += f"""
+            <div class="info-box">
+                <h3>💬 Comentarios del Administrador</h3>
+                <p><em>"{changes['comentario']['new']}"</em></p>
+            </div>
+            """
+        
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: #0066cc; color: white; padding: 20px; text-align: center; }}
+                .content {{ background: #f9f9f9; padding: 20px; border: 1px solid #ddd; }}
+                .info-box {{ background: white; padding: 15px; margin: 10px 0; border-left: 4px solid #0066cc; }}
+                .status-box {{ background: #e8f5e8; padding: 15px; margin: 10px 0; border-radius: 5px; }}
+                .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
+                .app-link {{ background: #007bff; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 10px 0; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>📋 Solicitud Asignada - IGAC</h1>
+                </div>
+                <div class="content">
+                    <div class="info-box">
+                        <h3>👋 Hola {responsable or email_responsable}</h3>
+                        <p>Se le ha asignado la siguiente solicitud para su gestión:</p>
+                    </div>
+                    
+                    <div class="info-box">
+                        <h3>📋 Detalles de la Solicitud</h3>
+                        <p><strong>ID:</strong> {datos['id_solicitud']}</p>
+                        <p><strong>Solicitante:</strong> {datos.get('nombre_solicitante', 'N/A')}</p>
+                        <p><strong>Email:</strong> {datos['email_solicitante']}</p>
+                        <p><strong>Proceso:</strong> {datos.get('proceso', 'N/A')}</p>
+                        <p><strong>Tipo:</strong> {datos['tipo_solicitud']}</p>
+                        <p><strong>Fecha:</strong> {datos['fecha_solicitud'].strftime('%d/%m/%Y') if 'fecha_solicitud' in datos else 'N/A'}</p>
+                    </div>
+                    
+                    {changes_html}
+                    
+                    <div class="info-box">
+                        <h3>⚡ Próximos Pasos</h3>
+                        <ul>
+                            <li>Revise los detalles de la solicitud</li>
+                            <li>Coordine la respuesta según sus procesos internos</li>
+                            <li>Mantenga actualizado el estado cuando sea necesario</li>
+                            <li>Contacte al solicitante si requiere información adicional</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="info-box" style="text-align: center;">
+                        <h3>🔍 Acceder al Sistema</h3>
+                        <p>Para gestionar esta solicitud:</p>
+                        <a href="{APP_URL}" class="app-link">📱 Sistema de Gestión</a>
+                        <p><small>Use el ID: <strong>{datos['id_solicitud']}</strong></small></p>
+                    </div>
+                </div>
+                <div class="footer">
+                    <p>Sistema de Gestión de Solicitudes - IGAC</p>
+                    <p>Si tiene preguntas, contacte al administrador del sistema.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """

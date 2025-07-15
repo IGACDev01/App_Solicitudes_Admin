@@ -682,11 +682,10 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
             if files_uploaded:
                 changes['archivos'] = {'new': files_uploaded}
         
-        # Step 4: Send notifications only if requested and changes occurred
+        # Step 4: Send notifications to solicitant only if requested and changes occurred
         email_sent = False
         if notificar_solicitante and changes:
             try:
-                from email_manager import EmailManager
                 email_manager = EmailManager()
                 
                 solicitud_data = {
@@ -706,6 +705,28 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
             except Exception as e:
                 print(f"Email notification error: {e}")
         
+
+        # NEW: Step 4b: Optional notification to responsible person
+        responsible_email_sent = False
+        if notificar_responsable and email_responsable and email_responsable.strip() and changes:
+            try:
+                responsible_data = {
+                    'id_solicitud': solicitud['id_solicitud'],
+                    'tipo_solicitud': solicitud['tipo_solicitud'],
+                    'email_solicitante': solicitud['email_solicitante'],
+                    'nombre_solicitante': solicitud['nombre_solicitante'],
+                    'fecha_solicitud': solicitud.get('fecha_solicitud'),
+                    'area': solicitud.get('area', 'N/A'),
+                    'proceso': solicitud.get('proceso', 'N/A')
+                }
+                
+                responsible_email_sent = email_manager.send_responsible_notification(
+                    responsible_data, changes, responsable, email_responsable
+                )
+                
+            except Exception as e:
+                print(f"Responsible notification error: {e}")
+
         # Step 5: Reload data and show success
         data_manager.load_data(force_reload=True)
         
@@ -726,7 +747,10 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
                 changes_text.append(f"{len(changes['archivos']['new'])} archivo(s) subido(s)")
             
             if email_sent:
-                changes_text.append("Notificación enviada")
+                changes_text.append("Notificación enviada al solicitante")
+
+            if responsible_email_sent:
+                changes_text.append(f"Notificación enviada a {email_responsable}")
             
             st.info("🔄 Cambios: " + " | ".join(changes_text))
         
