@@ -450,18 +450,18 @@ def mostrar_alertas_sistema(data_manager):
         except Exception as e:
             print(f"Error checking old requests: {e}")
     
-    # Solicitudes de alta prioridad pendientes
+    # Solicitudes de alta prioridad asignadas
     if 'prioridad' in df.columns:
-        alta_prioridad_pendientes = df[
+        alta_prioridad_asignadas = df[
             (df['prioridad'] == 'Alta') & 
-            (df['estado'] == 'Pendiente')
+            (df['estado'] == 'Asignada')
         ]
-        if not alta_prioridad_pendientes.empty:
+        if not alta_prioridad_asignadas.empty:
             alertas.append({
                 'tipo': 'error',
-                'titulo': '🔴 Alta prioridad pendiente',
-                'mensaje': f'{len(alta_prioridad_pendientes)} solicitudes de alta prioridad sin atender',
-                'detalle': list(alta_prioridad_pendientes['id_solicitud'].head(5))
+                'titulo': '🔴 Alta prioridad asignada',
+                'mensaje': f'{len(alta_prioridad_asignadas)} solicitudes de alta prioridad sin atender',
+                'detalle': list(alta_prioridad_asignadas['id_solicitud'].head(5))
             })
     
     # Mostrar alertas
@@ -573,7 +573,7 @@ def mostrar_grafico_estados(resumen):
     if estados_data:
         # Colores personalizados para cada estado
         colores = {
-            'Pendiente': '#FFA726',
+            'Asignada': '#FFA726',
             'En Proceso': '#42A5F5', 
             'Completado': '#66BB6A',
             'Cancelado': '#EF5350'
@@ -710,7 +710,7 @@ def mostrar_grafico_areas(data_manager):
             if not completadas_area.empty and 'tiempo_resolucion_dias' in completadas_area.columns:
                 tiempo_promedio_resolucion = completadas_area['tiempo_resolucion_dias'].mean()
             
-            pendientes = len(area_df[area_df['estado'] == 'Pendiente'])
+            asignadas = len(area_df[area_df['estado'] == 'Asignada'])
             en_proceso = len(area_df[area_df['estado'] == 'En Proceso'])
             completadas = len(area_df[area_df['estado'] == 'Completado'])
             canceladas = len(area_df[area_df['estado'] == 'Cancelado'])
@@ -718,14 +718,14 @@ def mostrar_grafico_areas(data_manager):
             
             area_data.append({
                 'Area': area,
-                'Pendientes': pendientes,
+                'Asignadas': asignadas,
                 'En Proceso': en_proceso,
                 'Completadas': completadas,
                 'Canceladas': canceladas,
                 'Total': total,
                 'Tasa_Completadas': round((completadas / total * 100), 2),
                 'Tiempo_Resolucion': round(tiempo_promedio_resolucion, 2),
-                'Pct_Pendientes': round((pendientes / total * 100), 2),
+                'Pct_Asignadas': round((asignadas / total * 100), 2),
                 'Pct_En_Proceso': round((en_proceso / total * 100), 2),
                 'Pct_Completadas': round((completadas / total * 100), 2),
                 'Pct_Canceladas': round((canceladas / total * 100), 2)
@@ -744,12 +744,12 @@ def mostrar_grafico_areas(data_manager):
             colores = {
                 'Completadas': '#66BB6A',
                 'En Proceso': '#42A5F5', 
-                'Pendientes': '#FFA726',
+                'Asignadas': '#FFA726',
                 'Canceladas': '#EF5350'
             }
             
             # Agregar barras para cada estado
-            estados = ['Completadas', 'En Proceso', 'Pendientes', 'Canceladas']
+            estados = ['Completadas', 'En Proceso', 'Asignadas', 'Canceladas']
             for estado in estados:
                 pct_col = f'Pct_{estado.replace(" ", "_")}'
                 fig_bar.add_trace(go.Bar(
@@ -876,7 +876,7 @@ def mostrar_grafico_territoriales(data_manager):
         st.info("No hay datos disponibles")
 
 def mostrar_analisis_temporal(data_manager):
-    """Mostrar análisis temporal - FIXED datetime handling"""
+    """Mostrar análisis temporal"""
     st.subheader("📈 Análisis Temporal")
     
     df = data_manager.get_all_requests()
@@ -912,7 +912,7 @@ def mostrar_analisis_temporal(data_manager):
             
             # Colores para estados
             colores_estado = {
-                'Pendiente': '#FFA726',
+                'Asignada': '#FFA726',
                 'En Proceso': '#42A5F5', 
                 'Completado': '#66BB6A',
                 'Cancelado': '#EF5350'

@@ -346,9 +346,9 @@ class SharePointListManager:
                         'tipo_solicitud': fields.get('TipoSolicitud', ''),
                         'area': fields.get('Area', ''),
                         'proceso': fields.get('Proceso', ''),
-                        'prioridad': fields.get('Prioridad', 'Sin asignar'),
+                        'prioridad': fields.get('Prioridad', 'Por definir'),
                         'descripcion': fields.get('Descripcion', ''),
-                        'estado': fields.get('Estado', 'Pendiente'),
+                        'estado': fields.get('Estado', 'Asignada'),
                         'responsable_asignado': fields.get('ResponsableAsignado', ''),
                         'fecha_actualizacion': self._normalize_datetime(self._parse_date(fields.get('FechaActualizacion'))),
                         'fecha_completado': self._normalize_datetime(self._parse_date(fields.get('FechaCompletado'))),
@@ -408,9 +408,9 @@ class SharePointListManager:
                     'TipoSolicitud': datos_solicitud['tipo'],
                     'Area': datos_solicitud['area'],
                     'Proceso': datos_solicitud['proceso'],
-                    'Prioridad': datos_solicitud.get('prioridad', 'Sin asignar'),
+                    'Prioridad': datos_solicitud.get('prioridad', 'Por definir'),
                     'Descripcion': datos_solicitud['descripcion'],
-                    'Estado': 'Pendiente',
+                    'Estado': 'Asignada',
                     'ResponsableAsignado': '',
                     'FechaActualizacion': current_time,
                     'TiempoRespuestaDias': 0,
@@ -488,7 +488,7 @@ class SharePointListManager:
                             update_data['TiempoResolucionDias'] = round(tiempo_resolucion, 2)
             
             # Calculate response time if this is the first update - FIXED timezone handling
-            if nuevo_estado != 'Pendiente':
+            if nuevo_estado != 'Asignada':
                 original_item = self.get_request_by_id(id_solicitud)
                 if not original_item.empty:
                     current_response_time = original_item.iloc[0].get('tiempo_respuesta_dias', 0)

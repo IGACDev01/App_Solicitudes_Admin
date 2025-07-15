@@ -183,7 +183,7 @@ class EmailManager:
                                         attachment_data: bytes = None, attachment_name: str = None) -> bool:
         """Send status update notification with file attachment"""
         if not self.email_enabled:
-            print(f"[SIMULATION] Status update email with attachment to: {datos_solicitud.get('email_solicitante', 'N/A')}")
+            print(f"Status update email with attachment to: {datos_solicitud.get('email_solicitante', 'N/A')}")
             print(f"- New status: {nuevo_estado}")
             if comentarios:
                 print(f"- Comments: {comentarios[:50]}...")
@@ -229,7 +229,7 @@ class EmailManager:
                                                 comentarios: str, attachment_name: str = None) -> str:
         """HTML template for status update notification with attachment"""
         estado_emoji = {
-            "Pendiente": "🟡",
+            "Asignada": "🟡",
             "En Proceso": "🔵", 
             "Completado": "✅",
             "Cancelado": "❌"
@@ -508,7 +508,7 @@ class EmailManager:
     def get_status_update_template(self, datos: Dict[str, Any], nuevo_estado: str, comentarios: str) -> str:
             """HTML template for status update notification - UPDATED with app link"""
             estado_emoji = {
-                "Pendiente": "🟡",
+                "Asignada": "🟡",
                 "En Proceso": "🔵", 
                 "Completado": "✅",
                 "Cancelado": "❌"
@@ -577,7 +577,7 @@ class EmailManager:
                                                 comentarios: str, attachment_name: str = None) -> str:
         """HTML template for status update notification with attachment - UPDATED with app link"""
         estado_emoji = {
-            "Pendiente": "🟡",
+            "Asignada": "🟡",
             "En Proceso": "🔵", 
             "Completado": "✅",
             "Cancelado": "❌"
@@ -663,7 +663,7 @@ class EmailManager:
         
         if 'estado' in changes:
             estado_emoji = {
-                "Pendiente": "🟡", "En Proceso": "🔵", 
+                "Asignada": "🟡", "En Proceso": "🔵", 
                 "Completado": "✅", "Cancelado": "❌"
             }
             old_emoji = estado_emoji.get(changes['estado']['old'], '🔹')
