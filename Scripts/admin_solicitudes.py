@@ -733,12 +733,33 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
             'new_status': nuevo_estado
         }
         
+        # CLEAR FORM FIELDS AFTER SUCCESSFUL UPDATE
+        clear_form_fields(solicitud['id_solicitud'])
+        
         return True
             
     except Exception as e:
         st.error(f"❌ Error al procesar actualización: {str(e)}")
         return False
+
+
+def clear_form_fields(id_solicitud):
+    """Clear all form fields for a specific request"""
+    form_keys = [
+        f"estado_{id_solicitud}",
+        f"prioridad_{id_solicitud}",
+        f"responsable_{id_solicitud}",
+        f"comentarios_{id_solicitud}",
+        f"email_resp_{id_solicitud}",
+        f"admin_files_{id_solicitud}",
+        f"notify_user_{id_solicitud}",
+        f"notify_resp_{id_solicitud}"
+    ]
     
+    for key in form_keys:
+        if key in st.session_state:
+            del st.session_state[key]
+             
 def show_update_summary(solicitud, nuevo_estado, nueva_prioridad, responsable, 
                        nuevo_comentario, email_sent, notificar_responsable, email_responsable, files_uploaded=None):
     """Show update summary in a clean way"""
