@@ -733,6 +733,11 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
             'new_status': nuevo_estado
         }
         
+        # CLEAR ONLY THE COMMENT FIELD AFTER SUCCESSFUL UPDATE
+        comment_key = f"comentarios_{solicitud['id_solicitud']}"
+        if comment_key in st.session_state:
+            st.session_state[comment_key] = ""
+        
         return True
             
     except Exception as e:
