@@ -115,7 +115,7 @@ def mostrar_tab_admin(data_manager):
     # SharePoint status indicator
     status = data_manager.get_sharepoint_status()
     total_requests = len(data_manager.get_all_requests())
-    last_update = now_colombia().strftime('%H:%M:%S COT')
+    last_update = now_colombia().strftime('%H:%M:%S')
     
     if status['sharepoint_connected']:
         st.success(f"✅ SharePoint Connected - {total_requests} solicitudes | Actualizado: {last_update}")
