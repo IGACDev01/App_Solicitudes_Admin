@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from email_manager import EmailManager
 import plotly.express as px
 import plotly.graph_objects as go
+from timezone_utils import now_colombia, to_colombia, format_colombia_time
 
 # Credenciales por proceso
 ADMIN_CREDENTIALS = {
@@ -22,7 +23,7 @@ ADMIN_CREDENTIALS = {
 
 def agregar_comentario_admin(comentario_actual, nuevo_comentario, responsable):
     """Add a new admin comment with timestamp and author"""
-    timestamp = datetime.now().strftime('%d/%m/%Y %H:%M')
+    timestamp = now_colombia().strftime('%d/%m/%Y %H:%M COT')
     nuevo_entry = f"[{timestamp} - {responsable}]: {nuevo_comentario}"
     
     if comentario_actual and comentario_actual.strip():
@@ -114,7 +115,7 @@ def mostrar_tab_admin(data_manager):
     # SharePoint status indicator
     status = data_manager.get_sharepoint_status()
     total_requests = len(data_manager.get_all_requests())
-    last_update = datetime.now().strftime('%H:%M:%S')
+    last_update = now_colombia().strftime('%H:%M:%S COT')
     
     if status['sharepoint_connected']:
         st.success(f"✅ SharePoint Connected - {total_requests} solicitudes | Actualizado: {last_update}")
@@ -205,18 +206,8 @@ def normalize_datetime(dt):
     if dt is None:
         return None
     
-    if hasattr(dt, 'tz_localize'):
-        # It's a pandas Timestamp
-        if dt.tz is not None:
-            return dt.tz_localize(None)
-        return dt
-    elif hasattr(dt, 'tzinfo'):
-        # It's a datetime object
-        if dt.tzinfo is not None:
-            return dt.replace(tzinfo=None)
-        return dt
-    
-    return dt
+    # Use timezone utility for consistency
+    return to_colombia(dt)
 
 def mostrar_mini_dashboard(df, proceso):
     """Mini dashboard del proceso - UPDATED with timezone handling"""
@@ -243,7 +234,7 @@ def mostrar_mini_dashboard(df, proceso):
     
     # Alertas
     if asignadas > 0:
-        fecha_limite = datetime.now() - timedelta(days=7)
+        fecha_limite = now_colombia() - timedelta(days=7)
         
         # Normalize datetime columns for comparison
         df_normalized = df.copy()
@@ -383,7 +374,7 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
     show_success = False
     
     if recently_updated:
-        time_diff = datetime.now() - recently_updated['timestamp']
+        time_diff = now_colombia() - recently_updated['timestamp']
         if time_diff.total_seconds() < 30:
             expanded = True
             show_success = True
@@ -415,10 +406,8 @@ def mostrar_solicitud_admin_improved(data_manager, solicitud, proceso):
                 st.write(f"**Territorial:** {solicitud['territorial']}")
             
             if 'fecha_solicitud' in solicitud:
-                fecha_solicitud = normalize_datetime(solicitud['fecha_solicitud'])
-                if fecha_solicitud:
-                    fecha_str = fecha_solicitud.strftime('%d/%m/%Y %H:%M')
-                    st.write(f"**Fecha:** {fecha_str}")
+                fecha_str = format_colombia_time(solicitud['fecha_solicitud'])
+                st.write(f"**Fecha:** {fecha_str}")
         
         with col2:
             st.write("**📝 Descripción**")
@@ -563,7 +552,7 @@ def mostrar_archivos_adjuntos_admin(data_manager, id_solicitud):
                     if attachment.get('created'):
                         try:
                             created_date = datetime.fromisoformat(attachment['created'].replace('Z', '+00:00'))
-                            created_str = created_date.strftime('%d/%m/%Y %H:%M')
+                            created_str = format_colombia_time(created_date)
                             st.caption(f"📅 Subido: {created_str}")
                         except:
                             st.caption("📅 Fecha no disponible")
@@ -756,7 +745,7 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
         
         # Mark for UI feedback
         st.session_state[f'recently_updated_{solicitud["id_solicitud"]}'] = {
-            'timestamp': datetime.now(),
+            'timestamp': now_colombia(),
             'new_status': nuevo_estado
         }
         

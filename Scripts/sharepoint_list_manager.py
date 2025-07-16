@@ -7,6 +7,10 @@ import requests
 import json
 from typing import Dict, Any, Optional, List
 from urllib.parse import quote
+import pytz
+
+# Colombian timezone
+COLOMBIA_TZ = pytz.timezone('America/Bogota')
 
 
 class SharePointListManager:
@@ -851,3 +855,18 @@ class SharePointListManager:
             'site_url': self.graph_config.get('sharepoint_site_url'),
             'target_drive_connected': bool(self.target_drive_id)
         }
+    
+    def to_colombia_time(dt):
+        """Convert any datetime to Colombian timezone"""
+        if dt is None:
+            return None
+        
+        try:
+            # If datetime is timezone-naive, assume UTC
+            if dt.tzinfo is None:
+                dt = pytz.utc.localize(dt)
+            
+            # Convert to Colombian time
+            return dt.astimezone(COLOMBIA_TZ)
+        except:
+            return dt
