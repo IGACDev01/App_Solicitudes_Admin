@@ -196,10 +196,7 @@ def mostrar_tab_dashboard(data_manager):
 
     # Métricas tiempo
     mostrar_metricas_tiempo(resumen)
-    
-    # Estadísticas adicionales
-    mostrar_estadisticas_adicionales(resumen)
-    
+       
     st.markdown("---")
     
     # Análisis visual
@@ -529,14 +526,6 @@ def mostrar_metricas_tiempo(resumen):
         )
     
     with col3:
-        pass
-
-def mostrar_estadisticas_adicionales(resumen):
-    """Mostrar estadísticas adicionales"""
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        # Tasa de resolución
         if resumen['total_solicitudes'] > 0:
             tasa_resolucion = (resumen['solicitudes_completadas'] / resumen['total_solicitudes']) * 100
             st.metric(
@@ -544,34 +533,7 @@ def mostrar_estadisticas_adicionales(resumen):
                 value=f"{tasa_resolucion:.1f}%",
                 delta=None
             )
-    
-    with col2:
-        # Eficiencia (basada en tiempo de resolución)
-        tiempo_resolucion = resumen['tiempo_promedio_resolucion']
-        if tiempo_resolucion > 0:
-            if tiempo_resolucion <= 1:
-                eficiencia = "Excelente"
-            elif tiempo_resolucion <= 3:
-                eficiencia = "Buena"
-            elif tiempo_resolucion <= 7:
-                eficiencia = "Regular"
-            else:
-                eficiencia = "Mejorable"
-            
-            st.metric(
-                label="⚡ Eficiencia",
-                value=eficiencia,
-                delta=None
-            )
-    
-    with col3:
-        # Carga de trabajo
-        carga = "Baja" if resumen['solicitudes_activas'] <= 5 else "Media" if resumen['solicitudes_activas'] <= 15 else "Alta"
-        st.metric(
-            label="📊 Carga de Trabajo",
-            value=carga,
-            delta=None
-        )
+      
 
 def mostrar_grafico_estados(resumen):
     """Mostrar gráfico de distribución por estados"""
