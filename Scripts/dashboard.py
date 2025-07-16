@@ -174,7 +174,11 @@ def mostrar_tab_dashboard(data_manager):
         return
 
     # Obtener resumen de datos
-    resumen = data_manager.get_requests_summary()
+    if hasattr(data_manager, 'df') and data_manager.df is not None:
+        resumen = data_manager.get_requests_summary()
+    else:
+        st.warning("No hay datos disponibles")
+        return
     
     if resumen.get('total_solicitudes', 0) == 0:
         st.info("📋 No hay solicitudes registradas aún. ¡Registre la primera solicitud en la pestaña de Registro!")
@@ -239,19 +243,7 @@ def mostrar_dataframe_visualizer(data_manager):
     if df.empty:
         st.info("📋 No hay datos disponibles para visualizar")
         return
-    
-    # Controls section
-    col1, col2, col3 = st.columns([2, 1, 1])
-    
-    with col1:
-        st.markdown("**Explora y filtra los datos de solicitudes**")
-    
-    with col2:
-        show_raw_data = st.checkbox("📊 Mostrar datos crudos", value=False)
-    
-    with col3:
-        max_rows = st.selectbox("📏 Filas a mostrar", [10, 25, 50, 100, "Todas"], index=1)
-    
+           
     # Advanced filters
     with st.expander("🔧 Filtros Avanzados", expanded=False):
         filter_col1, filter_col2, filter_col3 = st.columns(3)
@@ -281,7 +273,7 @@ def mostrar_dataframe_visualizer(data_manager):
                 prioridad_filtro = "Todas"
         
         with filter_col3:
-            # Date range filter - FIXED datetime handling
+            # Date range filter
             if 'fecha_solicitud' in df.columns:
                 fecha_min_dt = safe_datetime_operation(df['fecha_solicitud'], 'min')
                 fecha_max_dt = safe_datetime_operation(df['fecha_solicitud'], 'max')
@@ -316,9 +308,8 @@ def mostrar_dataframe_visualizer(data_manager):
     if prioridad_filtro != "Todas" and 'prioridad' in df_filtrado.columns:
         df_filtrado = df_filtrado[df_filtrado['prioridad'] == prioridad_filtro]
     
-    # Apply date filters - FIXED
+    # Apply date filters
     if fecha_desde and fecha_hasta and 'fecha_solicitud' in df_filtrado.columns:
-        # Convert dates to datetime and handle timezone issues
         df_filtrado['fecha_solicitud_clean'] = pd.to_datetime(df_filtrado['fecha_solicitud'], errors='coerce')
         if df_filtrado['fecha_solicitud_clean'].dt.tz is not None:
             df_filtrado['fecha_solicitud_clean'] = df_filtrado['fecha_solicitud_clean'].dt.tz_localize(None)
@@ -337,10 +328,7 @@ def mostrar_dataframe_visualizer(data_manager):
             df_filtrado['nombre_solicitante'].str.contains(busqueda_texto, case=False, na=False)
         )
         df_filtrado = df_filtrado[mask]
-    
-    # Show filtered results count
-    st.info(f"📊 Mostrando {len(df_filtrado)} de {len(df)} solicitudes")
-    
+        
     if df_filtrado.empty:
         st.warning("⚠️ No se encontraron solicitudes con los filtros aplicados")
         return
@@ -368,70 +356,51 @@ def mostrar_dataframe_visualizer(data_manager):
         
         if not selected_columns:
             selected_columns = default_columns
-    
+
+
+    max_rows = st.selectbox("📏 Filas a mostrar", [10, 25, 50, 100, "Todas"], index=1)
+
     # Apply row limit
     if max_rows != "Todas":
         df_display = df_filtrado[selected_columns].head(max_rows)
     else:
         df_display = df_filtrado[selected_columns]
+     
+    # Format dates for better display
+    df_display_formatted = df_display.copy()
     
-    # Display options
-    col1, col2 = st.columns([3, 1])
+    # Handle datetime columns safely
+    for col in df_display_formatted.columns:
+        if 'fecha' in col.lower() and col in df_display_formatted.columns:
+            try:
+                df_col = df_display_formatted[col]
+                if pd.api.types.is_datetime64_any_dtype(df_col):
+                    # Remove timezone info and format
+                    df_col_clean = pd.to_datetime(df_col, errors='coerce')
+                    if df_col_clean.dt.tz is not None:
+                        df_col_clean = df_col_clean.dt.tz_localize(None)
+                    df_display_formatted[col] = df_col_clean.dt.strftime('%d/%m/%Y %H:%M')
+            except Exception as e:
+                print(f"Error formatting column {col}: {e}")
+                continue
     
-    with col1:
-        display_mode = st.radio(
-            "Modo de visualización:",
-            ["📊 Tabla Interactiva", "📋 Datos Simples"],
-            horizontal=True
-        )
-    
-    with col2:
-        if st.button("📥 Descargar CSV", help="Descargar datos filtrados"):
-            csv = df_filtrado.to_csv(index=False)
-            st.download_button(
-                label="⬇️ Descargar",
-                data=csv,
-                file_name=f"solicitudes_filtradas_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                mime="text/csv"
-            )
-    
-    # Display the data - FIXED datetime formatting
-    if display_mode == "📊 Tabla Interactiva":
-        # Format dates for better display
-        df_display_formatted = df_display.copy()
-        
-        # Handle datetime columns safely
-        for col in df_display_formatted.columns:
-            if 'fecha' in col.lower() and col in df_display_formatted.columns:
-                try:
-                    df_col = df_display_formatted[col]
-                    if pd.api.types.is_datetime64_any_dtype(df_col):
-                        # Remove timezone info and format
-                        df_col_clean = pd.to_datetime(df_col, errors='coerce')
-                        if df_col_clean.dt.tz is not None:
-                            df_col_clean = df_col_clean.dt.tz_localize(None)
-                        df_display_formatted[col] = df_col_clean.dt.strftime('%d/%m/%Y %H:%M')
-                except Exception as e:
-                    print(f"Error formatting column {col}: {e}")
-                    continue
-        
-        # Use st.dataframe with interactive features
-        st.dataframe(
-            df_display_formatted,
-            use_container_width=True,
-            height=400,
-            column_config={
-                "id_solicitud": st.column_config.TextColumn("ID", width="small"),
-                "estado": st.column_config.TextColumn("Estado", width="small"),
-                "prioridad": st.column_config.TextColumn("Prioridad", width="small"),
-                "tiempo_respuesta_dias": st.column_config.NumberColumn("T. Respuesta (días)", format="%.2f"),
-                "tiempo_resolucion_dias": st.column_config.NumberColumn("T. Resolución (días)", format="%.2f"),
-            }
-        )
-    else:
-        # Simple table view
-        st.table(df_display)
-    
+    # Use st.dataframe with interactive features
+    st.dataframe(
+        df_display_formatted,
+        use_container_width=True,
+        height=400,
+        column_config={
+            "id_solicitud": st.column_config.TextColumn("ID", width="small"),
+            "estado": st.column_config.TextColumn("Estado", width="small"),
+            "prioridad": st.column_config.TextColumn("Prioridad", width="small"),
+            "tiempo_respuesta_dias": st.column_config.NumberColumn("T. Respuesta (días)", format="%.2f"),
+            "tiempo_resolucion_dias": st.column_config.NumberColumn("T. Resolución (días)", format="%.2f"),
+        }
+    )
+
+    # Show filtered results count
+    st.info(f"📊 Mostrando {len(df_filtrado)} de {len(df)} solicitudes")
+
     # Quick stats for filtered data
     if len(df_filtrado) > 0:
         st.markdown("---")
@@ -850,12 +819,31 @@ def mostrar_analisis_temporal(data_manager):
                 options=["Estado", "Prioridad"],
                 key="agrupacion_temporal"
             )
+
+        with col2:
+            periodo_temporal = st.selectbox(
+                "Período:",
+                options=["Día", "Mes", "Trimestre"],
+                index=1,  # Default to "Mes"
+                key="periodo_temporal"
+            )
         
         # Gráfico de solicitudes por mes
         if agrupacion == "Estado":
-            # Agrupar por mes y estado
-            datos_temporales = df.groupby(['mes_solicitud', 'estado']).size().reset_index(name='count')
-            datos_temporales['mes_str'] = datos_temporales['mes_solicitud'].astype(str)
+            # Create period column based on selection
+            if periodo_temporal == "Día":
+                df['periodo'] = df['fecha_solicitud_clean'].dt.to_period('D')
+                titulo_periodo = "Día"
+            elif periodo_temporal == "Mes":
+                df['periodo'] = df['fecha_solicitud_clean'].dt.to_period('M')
+                titulo_periodo = "Mes"
+            else:  # Trimestre
+                df['periodo'] = df['fecha_solicitud_clean'].dt.to_period('Q')
+                titulo_periodo = "Trimestre"
+            
+            # Agrupar por período y estado
+            datos_temporales = df.groupby(['periodo', 'estado']).size().reset_index(name='count')
+            datos_temporales['periodo_str'] = datos_temporales['periodo'].astype(str)
             
             # Colores para estados
             colores_estado = {
@@ -867,12 +855,12 @@ def mostrar_analisis_temporal(data_manager):
             
             fig = px.bar(
                 datos_temporales,
-                x='mes_str',
+                x='periodo_str',
                 y='count',
                 color='estado',
-                title="Solicitudes por Mes (Agrupadas por Estado)",
+                title=f"Solicitudes por {titulo_periodo} (Agrupadas por Estado)",
                 labels={
-                    'mes_str': 'Mes',
+                    'periodo_str': titulo_periodo,
                     'count': 'Número de Solicitudes',
                     'estado': 'Estado'
                 },
@@ -884,9 +872,19 @@ def mostrar_analisis_temporal(data_manager):
                 st.info("No hay datos de prioridad disponibles")
                 return
                 
-            # Agrupar por mes y prioridad
-            datos_temporales = df.groupby(['mes_solicitud', 'prioridad']).size().reset_index(name='count')
-            datos_temporales['mes_str'] = datos_temporales['mes_solicitud'].astype(str)
+            if periodo_temporal == "Día":
+                df['periodo'] = df['fecha_solicitud_clean'].dt.to_period('D')
+                titulo_periodo = "Día"
+            elif periodo_temporal == "Mes":
+                df['periodo'] = df['fecha_solicitud_clean'].dt.to_period('M')
+                titulo_periodo = "Mes"
+            else:  # Trimestre
+                df['periodo'] = df['fecha_solicitud_clean'].dt.to_period('Q')
+                titulo_periodo = "Trimestre"
+            
+            # Agrupar por período y prioridad
+            datos_temporales = df.groupby(['periodo', 'prioridad']).size().reset_index(name='count')
+            datos_temporales['periodo_str'] = datos_temporales['periodo'].astype(str)
             
             # Colores para prioridades
             colores_prioridad = {
@@ -898,12 +896,12 @@ def mostrar_analisis_temporal(data_manager):
             
             fig = px.bar(
                 datos_temporales,
-                x='mes_str',
+                x='periodo_str',
                 y='count',
                 color='prioridad',
-                title="Solicitudes por Mes (Agrupadas por Prioridad)",
+                title=f"Solicitudes por {titulo_periodo} (Agrupadas por Prioridad)",
                 labels={
-                    'mes_str': 'Mes',
+                    'periodo_str': titulo_periodo,
                     'count': 'Número de Solicitudes',
                     'prioridad': 'Prioridad'
                 },
@@ -929,32 +927,31 @@ def mostrar_analisis_temporal(data_manager):
         
         st.plotly_chart(fig, use_container_width=True)
         
-        # Gráfico de tiempo promedio de resolución por mes - FIXED
+        # Gráfico de tiempo promedio de resolución por mes
         if 'tiempo_resolucion_dias' in df.columns:
             completadas = df[df['estado'] == 'Completado'].copy()
             if not completadas.empty:
-                # Use fecha_completado if available, otherwise fecha_solicitud
-                if 'fecha_completado' in completadas.columns:
-                    completadas['fecha_completado_clean'] = pd.to_datetime(completadas['fecha_completado'], errors='coerce')
-                    if completadas['fecha_completado_clean'].dt.tz is not None:
-                        completadas['fecha_completado_clean'] = completadas['fecha_completado_clean'].dt.tz_localize(None)
-                    completadas['mes_resolucion'] = completadas['fecha_completado_clean'].dt.to_period('M')
-                else:
-                    completadas['mes_resolucion'] = completadas['fecha_solicitud_clean'].dt.to_period('M')
+                # Use same period selection for resolution time
+                if periodo_temporal == "Día":
+                    completadas['periodo_resolucion'] = completadas['fecha_solicitud_clean'].dt.to_period('D')
+                elif periodo_temporal == "Mes":
+                    completadas['periodo_resolucion'] = completadas['fecha_solicitud_clean'].dt.to_period('M')
+                else:  # Trimestre
+                    completadas['periodo_resolucion'] = completadas['fecha_solicitud_clean'].dt.to_period('Q')
                 
-                tiempos_por_mes = completadas.groupby('mes_resolucion')['tiempo_resolucion_dias'].mean().reset_index()
-                tiempos_por_mes['mes_str'] = tiempos_por_mes['mes_resolucion'].astype(str)
-                tiempos_por_mes['tiempo_resolucion_dias'] = tiempos_por_mes['tiempo_resolucion_dias'].round(2)
+                tiempos_por_periodo = completadas.groupby('periodo_resolucion')['tiempo_resolucion_dias'].mean().reset_index()
+                tiempos_por_periodo['periodo_str'] = tiempos_por_periodo['periodo_resolucion'].astype(str)
+                tiempos_por_periodo['tiempo_resolucion_dias'] = tiempos_por_periodo['tiempo_resolucion_dias'].round(2)
                 
-                if len(tiempos_por_mes) > 0:
+                if len(tiempos_por_periodo) > 0:
                     fig_tiempo = px.line(
-                        tiempos_por_mes,
-                        x='mes_str',
+                        tiempos_por_periodo,
+                        x='periodo_str',
                         y='tiempo_resolucion_dias',
-                        title="Tiempo Promedio de Resolución por Mes",
+                        title=f"Tiempo Promedio de Resolución por {titulo_periodo}",
                         markers=True,
                         labels={
-                            'mes_str': 'Mes',
+                            'periodo_str': titulo_periodo,
                             'tiempo_resolucion_dias': 'Tiempo Promedio (días)'
                         }
                     )
@@ -974,8 +971,8 @@ def mostrar_analisis_temporal(data_manager):
                     st.plotly_chart(fig_tiempo, use_container_width=True)
                     
                     # Mostrar tendencia
-                    if len(tiempos_por_mes) >= 2:
-                        tendencia = tiempos_por_mes['tiempo_resolucion_dias'].iloc[-1] - tiempos_por_mes['tiempo_resolucion_dias'].iloc[-2]
+                    if len(tiempos_por_periodo) >= 2:
+                        tendencia = tiempos_por_periodo['tiempo_resolucion_dias'].iloc[-1] - tiempos_por_periodo['tiempo_resolucion_dias'].iloc[-2]
                         col1, col2, col3 = st.columns(3)
                         
                         with col2:  # Centrar el mensaje
