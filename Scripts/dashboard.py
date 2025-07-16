@@ -85,39 +85,6 @@ def mostrar_tab_dashboard(data_manager):
         mostrar_login_dashboard()
         return
     
-    # Header with logout option
-    col1, col2, col3 = st.columns([2, 1, 1])
-    
-    with col1:
-        st.header("📊 Dashboard de Solicitudes")
-        usuario_actual = st.session_state.get('dashboard_usuario', 'Usuario')
-        st.caption(f"👤 Sesión activa: {usuario_actual}")
-    
-    with col2:
-        if st.button("🔄 Actualizar Datos", key="refresh_dashboard"):
-            data_manager.load_data(force_reload=True)
-            st.rerun()
-    
-    with col3:
-        if st.button("🚪 Cerrar Sesión", key="logout_dashboard"):
-            st.session_state.dashboard_authenticated = False
-            st.session_state.dashboard_usuario = None
-            st.rerun()
-    
-    st.markdown("---")
-    
-    # Barra de control
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        st.markdown("**Panel de control y análisis de solicitudes**")
-    
-    with col2:
-        auto_refresh = st.checkbox("🔄 Auto-actualizar", value=False, key="auto_refresh")
-        if auto_refresh:
-            data_manager.load_data(force_reload=True)
-            st.rerun()
-    
     # SharePoint status
     status = data_manager.get_sharepoint_status()
     if not status['sharepoint_connected']:
@@ -131,11 +98,37 @@ def mostrar_tab_dashboard(data_manager):
     if df_all.empty:
         st.info("📋 No hay solicitudes registradas aún. ¡Registre la primera solicitud en la pestaña de Registro!")
         return
+
+    # Header with logout option
+    col1, col2, col3 = st.columns([3, 1, 1])
+    
+    with col1:
+        st.header("📊 Dashboard de Solicitudes")
+        usuario_actual = st.session_state.get('dashboard_usuario', 'Usuario')
+        st.caption(f"👤 Sesión activa: {usuario_actual}")
+    
+    with col2:
+        None
+
+    with col3:
+        if st.button("Cerrar Sesión", key="logout_dashboard"):
+            st.session_state.dashboard_authenticated = False
+            st.session_state.dashboard_usuario = None
+            st.rerun()
+
+    st.markdown(" ")
+
+    if st.button("🔄 Actualizar Datos", key="refresh_dashboard"):
+            data_manager.load_data(force_reload=True)
+            st.rerun()
     
     st.markdown("---")
-    st.subheader("🔧 Filtros Globales")
 
-    col1, col2, col3 = st.columns([2, 2, 2])
+    # Initialize or increment filter version for widget keys
+    if 'filter_version' not in st.session_state:
+        st.session_state.filter_version = 0
+
+    col1, col2, col3 = st.columns([2, 3, 1])
 
     with col1:
         # Get unique areas
@@ -144,7 +137,8 @@ def mostrar_tab_dashboard(data_manager):
         filtro_area_global = st.selectbox(
             "Filtrar por Área:",
             options=areas_disponibles,
-            key="filtro_area_global_dashboard"
+            index=0,  # Always start with "Todas"
+            key=f"filtro_area_global_dashboard_{st.session_state.filter_version}"
         )
 
     with col2:
@@ -154,14 +148,15 @@ def mostrar_tab_dashboard(data_manager):
         filtro_proceso_global = st.selectbox(
             "Filtrar por Proceso:",
             options=procesos_disponibles,
-            key="filtro_proceso_global_dashboard"
+            index=0,  # Always start with "Todos"
+            key=f"filtro_proceso_global_dashboard_{st.session_state.filter_version}"
         )
 
     with col3:
         # Clear filters button
         if st.button("🔄 Limpiar Filtros", key="clear_global_filters"):
-            st.session_state.filtro_area_global_dashboard = "Todas"
-            st.session_state.filtro_proceso_global_dashboard = "Todos"
+            # Increment version to create new widget instances
+            st.session_state.filter_version += 1
             st.rerun()
 
     # Apply global filters to data
@@ -178,21 +173,22 @@ def mostrar_tab_dashboard(data_manager):
         st.warning("⚠️ No se encontraron solicitudes con los filtros aplicados")
         return
 
-    # FIXED: Create a temporary data manager instance with filtered data for summary
-    # Don't modify the original data_manager.df
-    temp_data_manager = type('TempDataManager', (), {})()
-    temp_data_manager.df = df_filtrado_global
-    temp_data_manager.get_requests_summary = data_manager.get_requests_summary.__get__(temp_data_manager, type(temp_data_manager))
+    # SIMPLER APPROACH: Temporarily set the data manager's df to filtered data
+    # Save original data
+    original_df = data_manager.df
+    
+    # Set filtered data
+    data_manager.df = df_filtrado_global
     
     # Get summary from filtered data
-    resumen = temp_data_manager.get_requests_summary()
+    resumen = data_manager.get_requests_summary()
     
     # Show last update time
     last_update = now_colombia().strftime('%H:%M:%S')
     st.caption(f"📊 Última actualización: {last_update}")
     
-    # Mostrar alertas del sistema - use filtered data
-    mostrar_alertas_sistema(temp_data_manager)
+    # Mostrar alertas del sistema
+    mostrar_alertas_sistema(data_manager)
     
     # Métricas principales
     st.subheader("📈 Métricas Principales")
@@ -216,27 +212,30 @@ def mostrar_tab_dashboard(data_manager):
         mostrar_grafico_estados(resumen)
     
     with col2:
-        mostrar_grafico_prioridades(temp_data_manager)
+        mostrar_grafico_prioridades(data_manager)
     
     # Segunda fila de gráficos
     mostrar_grafico_tipos(resumen)
     
     # Tercera fila de gráficos
-    mostrar_grafico_procesos(temp_data_manager)
+    mostrar_grafico_procesos(data_manager)
         
     # Cuarta fila de gráficos
-    mostrar_grafico_territoriales(temp_data_manager)
+    mostrar_grafico_territoriales(data_manager)
     
     st.markdown("---")
     
     # Análisis temporal
-    mostrar_analisis_temporal(temp_data_manager)
+    mostrar_analisis_temporal(data_manager)
     
     st.markdown("---")
     
     # DataFrame Visualizer
-    mostrar_dataframe_visualizer(temp_data_manager)
-      
+    mostrar_dataframe_visualizer(data_manager)
+    
+    # IMPORTANT: Restore original data at the end
+    data_manager.df = original_df
+
 def mostrar_dataframe_visualizer(data_manager):
     """Mostrar visualizador de DataFrame con filtros avanzados - SharePoint optimized"""
     st.subheader("🔍 Explorador de Datos")
@@ -788,7 +787,7 @@ def mostrar_grafico_territoriales(data_manager):
         st.info("No hay datos disponibles")
 
 def mostrar_analisis_temporal(data_manager):
-    """Mostrar análisis temporal - UPDATED with timezone handling"""
+    """Mostrar análisis temporal"""
     st.subheader("📈 Análisis Temporal")
     
     df = data_manager.get_all_requests()
@@ -801,8 +800,8 @@ def mostrar_analisis_temporal(data_manager):
         # Clean datetime column using timezone utility
         df['fecha_solicitud_clean'] = df['fecha_solicitud'].apply(to_colombia)
         
-        # Create month column
-        df['mes_solicitud'] = df['fecha_solicitud_clean'].dt.to_period('M')
+        # Remove timezone info to avoid pandas warnings
+        df['fecha_solicitud_naive'] = df['fecha_solicitud_clean'].dt.tz_localize(None)
         
         # Selector para agrupar por estado o prioridad
         col1, col2 = st.columns([1, 3])
@@ -822,165 +821,170 @@ def mostrar_analisis_temporal(data_manager):
                 key="periodo_temporal"
             )
         
-        # Gráfico de solicitudes por mes
-        if agrupacion == "Estado":
-            # Create period column based on selection
-            if periodo_temporal == "Día":
-                df['periodo'] = df['fecha_solicitud_clean'].dt.to_period('D')
-                titulo_periodo = "Día"
-            elif periodo_temporal == "Mes":
-                df['periodo'] = df['fecha_solicitud_clean'].dt.to_period('M')
-                titulo_periodo = "Mes"
-            else:  # Trimestre
-                df['periodo'] = df['fecha_solicitud_clean'].dt.to_period('Q')
-                titulo_periodo = "Trimestre"
+        # Suppress pandas warnings for period conversion
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
             
-            # Agrupar por período y estado
-            datos_temporales = df.groupby(['periodo', 'estado']).size().reset_index(name='count')
-            datos_temporales['periodo_str'] = datos_temporales['periodo'].astype(str)
-            
-            # Colores para estados
-            colores_estado = {
-                'Asignada': '#FFA726',
-                'En Proceso': '#42A5F5', 
-                'Completado': '#66BB6A',
-                'Cancelado': '#EF5350'
-            }
-            
-            fig = px.bar(
-                datos_temporales,
-                x='periodo_str',
-                y='count',
-                color='estado',
-                title=f"Solicitudes por {titulo_periodo} (Agrupadas por Estado)",
-                labels={
-                    'periodo_str': titulo_periodo,
-                    'count': 'Número de Solicitudes',
-                    'estado': 'Estado'
-                },
-                color_discrete_map=colores_estado
-            )
-            
-        else:  # Prioridad
-            if 'prioridad' not in df.columns:
-                st.info("No hay datos de prioridad disponibles")
-                return
-                
-            if periodo_temporal == "Día":
-                df['periodo'] = df['fecha_solicitud_clean'].dt.to_period('D')
-                titulo_periodo = "Día"
-            elif periodo_temporal == "Mes":
-                df['periodo'] = df['fecha_solicitud_clean'].dt.to_period('M')
-                titulo_periodo = "Mes"
-            else:  # Trimestre
-                df['periodo'] = df['fecha_solicitud_clean'].dt.to_period('Q')
-                titulo_periodo = "Trimestre"
-            
-            # Agrupar por período y prioridad
-            datos_temporales = df.groupby(['periodo', 'prioridad']).size().reset_index(name='count')
-            datos_temporales['periodo_str'] = datos_temporales['periodo'].astype(str)
-            
-            # Colores para prioridades
-            colores_prioridad = {
-                'Alta': '#d32f2f',
-                'Media': '#f57c00',
-                'Baja': '#388e3c',
-                'Por definir': '#9e9e9e'
-            }
-            
-            fig = px.bar(
-                datos_temporales,
-                x='periodo_str',
-                y='count',
-                color='prioridad',
-                title=f"Solicitudes por {titulo_periodo} (Agrupadas por Prioridad)",
-                labels={
-                    'periodo_str': titulo_periodo,
-                    'count': 'Número de Solicitudes',
-                    'prioridad': 'Prioridad'
-                },
-                color_discrete_map=colores_prioridad
-            )
-        
-        fig.update_layout(
-            height=400,
-            margin=dict(t=50, b=0, l=0, r=0),
-            xaxis=dict(title=""),
-            yaxis=dict(title="Número de Solicitudes",
-                       tickmode='linear', 
-                       dtick=1   
-                       ),
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            )
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Gráfico de tiempo promedio de resolución por mes - UPDATED with timezone handling
-        if 'tiempo_resolucion_dias' in df.columns:
-            completadas = df[df['estado'] == 'Completado'].copy()
-            if not completadas.empty:
-                # Use same period selection for resolution time
+            # Gráfico de solicitudes por período
+            if agrupacion == "Estado":
+                # Create period column based on selection
                 if periodo_temporal == "Día":
-                    completadas['periodo_resolucion'] = completadas['fecha_solicitud_clean'].dt.to_period('D')
+                    df['periodo'] = df['fecha_solicitud_naive'].dt.to_period('D')
+                    titulo_periodo = "Día"
                 elif periodo_temporal == "Mes":
-                    completadas['periodo_resolucion'] = completadas['fecha_solicitud_clean'].dt.to_period('M')
+                    df['periodo'] = df['fecha_solicitud_naive'].dt.to_period('M')
+                    titulo_periodo = "Mes"
                 else:  # Trimestre
-                    completadas['periodo_resolucion'] = completadas['fecha_solicitud_clean'].dt.to_period('Q')
+                    df['periodo'] = df['fecha_solicitud_naive'].dt.to_period('Q')
+                    titulo_periodo = "Trimestre"
                 
-                tiempos_por_periodo = completadas.groupby('periodo_resolucion')['tiempo_resolucion_dias'].mean().reset_index()
-                tiempos_por_periodo['periodo_str'] = tiempos_por_periodo['periodo_resolucion'].astype(str)
-                tiempos_por_periodo['tiempo_resolucion_dias'] = tiempos_por_periodo['tiempo_resolucion_dias'].round(2)
+                # Agrupar por período y estado
+                datos_temporales = df.groupby(['periodo', 'estado']).size().reset_index(name='count')
+                datos_temporales['periodo_str'] = datos_temporales['periodo'].astype(str)
                 
-                if len(tiempos_por_periodo) > 0:
-                    fig_tiempo = px.line(
-                        tiempos_por_periodo,
-                        x='periodo_str',
-                        y='tiempo_resolucion_dias',
-                        title=f"Tiempo Promedio de Resolución por {titulo_periodo}",
-                        markers=True,
-                        labels={
-                            'periodo_str': titulo_periodo,
-                            'tiempo_resolucion_dias': 'Tiempo Promedio (días)'
-                        }
-                    )
+                # Colores para estados
+                colores_estado = {
+                    'Asignada': '#FFA726',
+                    'En Proceso': '#42A5F5', 
+                    'Completado': '#66BB6A',
+                    'Cancelado': '#EF5350'
+                }
+                
+                fig = px.bar(
+                    datos_temporales,
+                    x='periodo_str',
+                    y='count',
+                    color='estado',
+                    title=f"Solicitudes por {titulo_periodo} (Agrupadas por Estado)",
+                    labels={
+                        'periodo_str': titulo_periodo,
+                        'count': 'Número de Solicitudes',
+                        'estado': 'Estado'
+                    },
+                    color_discrete_map=colores_estado
+                )
+                
+            else:  # Prioridad
+                if 'prioridad' not in df.columns:
+                    st.info("No hay datos de prioridad disponibles")
+                    return
                     
-                    fig_tiempo.update_traces(
-                        line=dict(color='#ff6b6b', width=3),
-                        marker=dict(size=8, color='#4ecdc4')
-                    )
+                if periodo_temporal == "Día":
+                    df['periodo'] = df['fecha_solicitud_naive'].dt.to_period('D')
+                    titulo_periodo = "Día"
+                elif periodo_temporal == "Mes":
+                    df['periodo'] = df['fecha_solicitud_naive'].dt.to_period('M')
+                    titulo_periodo = "Mes"
+                else:  # Trimestre
+                    df['periodo'] = df['fecha_solicitud_naive'].dt.to_period('Q')
+                    titulo_periodo = "Trimestre"
+                
+                # Agrupar por período y prioridad
+                datos_temporales = df.groupby(['periodo', 'prioridad']).size().reset_index(name='count')
+                datos_temporales['periodo_str'] = datos_temporales['periodo'].astype(str)
+                
+                # Colores para prioridades
+                colores_prioridad = {
+                    'Alta': '#d32f2f',
+                    'Media': '#f57c00',
+                    'Baja': '#388e3c',
+                    'Por definir': '#9e9e9e'
+                }
+                
+                fig = px.bar(
+                    datos_temporales,
+                    x='periodo_str',
+                    y='count',
+                    color='prioridad',
+                    title=f"Solicitudes por {titulo_periodo} (Agrupadas por Prioridad)",
+                    labels={
+                        'periodo_str': titulo_periodo,
+                        'count': 'Número de Solicitudes',
+                        'prioridad': 'Prioridad'
+                    },
+                    color_discrete_map=colores_prioridad
+                )
+            
+            fig.update_layout(
+                height=400,
+                margin=dict(t=50, b=0, l=0, r=0),
+                xaxis=dict(title=""),
+                yaxis=dict(title="Número de Solicitudes",
+                           tickmode='linear', 
+                           dtick=1   
+                           ),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                )
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Gráfico de tiempo promedio de resolución por período
+            if 'tiempo_resolucion_dias' in df.columns:
+                completadas = df[df['estado'] == 'Completado'].copy()
+                if not completadas.empty:
+                    # Use same period selection for resolution time
+                    if periodo_temporal == "Día":
+                        completadas['periodo_resolucion'] = completadas['fecha_solicitud_naive'].dt.to_period('D')
+                    elif periodo_temporal == "Mes":
+                        completadas['periodo_resolucion'] = completadas['fecha_solicitud_naive'].dt.to_period('M')
+                    else:  # Trimestre
+                        completadas['periodo_resolucion'] = completadas['fecha_solicitud_naive'].dt.to_period('Q')
                     
-                    fig_tiempo.update_layout(
-                        height=350,
-                        margin=dict(t=50, b=0, l=0, r=0),
-                        xaxis=dict(title="Mes"),
-                        yaxis=dict(title="Tiempo Promedio (días)")
-                    )
+                    tiempos_por_periodo = completadas.groupby('periodo_resolucion')['tiempo_resolucion_dias'].mean().reset_index()
+                    tiempos_por_periodo['periodo_str'] = tiempos_por_periodo['periodo_resolucion'].astype(str)
+                    tiempos_por_periodo['tiempo_resolucion_dias'] = tiempos_por_periodo['tiempo_resolucion_dias'].round(2)
                     
-                    st.plotly_chart(fig_tiempo, use_container_width=True)
-                    
-                    # Mostrar tendencia
-                    if len(tiempos_por_periodo) >= 2:
-                        tendencia = tiempos_por_periodo['tiempo_resolucion_dias'].iloc[-1] - tiempos_por_periodo['tiempo_resolucion_dias'].iloc[-2]
-                        col1, col2, col3 = st.columns(3)
+                    if len(tiempos_por_periodo) > 0:
+                        fig_tiempo = px.line(
+                            tiempos_por_periodo,
+                            x='periodo_str',
+                            y='tiempo_resolucion_dias',
+                            title=f"Tiempo Promedio de Resolución por {titulo_periodo}",
+                            markers=True,
+                            labels={
+                                'periodo_str': titulo_periodo,
+                                'tiempo_resolucion_dias': 'Tiempo Promedio (días)'
+                            }
+                        )
                         
-                        with col2:  # Centrar el mensaje
-                            if tendencia < -0.5:
-                                st.success("📈 Tendencia positiva: Los tiempos están mejorando")
-                            elif tendencia > 0.5:
-                                st.warning("📉 Tendencia negativa: Los tiempos están aumentando")
-                            else:
-                                st.info("➡️ Tendencia estable: Los tiempos se mantienen constantes")
+                        fig_tiempo.update_traces(
+                            line=dict(color='#ff6b6b', width=3),
+                            marker=dict(size=8, color='#4ecdc4')
+                        )
+                        
+                        fig_tiempo.update_layout(
+                            height=350,
+                            margin=dict(t=50, b=0, l=0, r=0),
+                            xaxis=dict(title=titulo_periodo),
+                            yaxis=dict(title="Tiempo Promedio (días)")
+                        )
+                        
+                        st.plotly_chart(fig_tiempo, use_container_width=True)
+                        
+                        # Mostrar tendencia
+                        if len(tiempos_por_periodo) >= 2:
+                            tendencia = tiempos_por_periodo['tiempo_resolucion_dias'].iloc[-1] - tiempos_por_periodo['tiempo_resolucion_dias'].iloc[-2]
+                            col1, col2, col3 = st.columns(3)
+                            
+                            with col2:  # Centrar el mensaje
+                                if tendencia < -0.5:
+                                    st.success("📈 Tendencia positiva: Los tiempos están mejorando")
+                                elif tendencia > 0.5:
+                                    st.warning("📉 Tendencia negativa: Los tiempos están aumentando")
+                                else:
+                                    st.info("➡️ Tendencia estable: Los tiempos se mantienen constantes")
+                    else:
+                        st.info("No hay suficientes datos de resolución por período")
                 else:
-                    st.info("No hay suficientes datos de resolución por mes")
-            else:
-                st.info("No hay solicitudes completadas para analizar tiempos de resolución")
-                
+                    st.info("No hay solicitudes completadas para analizar tiempos de resolución")
+                    
     except Exception as e:
         st.error(f"Error en análisis temporal: {e}")
         print(f"Temporal analysis error: {e}")

@@ -6,8 +6,7 @@ from datetime import datetime, timedelta
 import requests
 from typing import Dict, Any, Optional, List
 from urllib.parse import quote
-import pytz
-from timezone_utils import now_colombia, to_colombia, to_utc_for_storage, format_colombia_time
+from timezone_utils import now_colombia, to_colombia, to_utc_for_storage
 
 class SharePointListManager:
     def __init__(self, list_name: str = "Data App Solicitudes"):
@@ -455,17 +454,17 @@ class SharePointListManager:
             if nuevo_estado == 'Completado':
                 update_data['FechaCompletado'] = current_time_utc
                 
-                # Calculate resolution time - FIXED timezone handling
+                # Calculate resolution time
                 original_item = self.get_request_by_id(id_solicitud)
                 if not original_item.empty:
                     fecha_solicitud = original_item.iloc[0]['fecha_solicitud']
                     if pd.notna(fecha_solicitud):
                         # Normalize both dates to timezone-naive
-                        fecha_solicitud_norm = to_colombia(fecha_solicitud)
+                        fecha_solicitud_colombia = to_colombia(fecha_solicitud)
                         fecha_actual_norm = now_colombia()
                         
-                        if fecha_solicitud_norm:
-                            tiempo_resolucion = (fecha_actual_norm - fecha_solicitud_norm).total_seconds() / (24 * 3600)
+                        if fecha_solicitud_colombia:
+                            tiempo_resolucion = (fecha_actual_norm - fecha_solicitud_colombia).total_seconds() / (24 * 3600)
                             update_data['TiempoResolucionDias'] = round(tiempo_resolucion, 2)
             
             # Calculate response time if this is the first update - FIXED timezone handling
@@ -477,11 +476,11 @@ class SharePointListManager:
                         fecha_solicitud = original_item.iloc[0]['fecha_solicitud']
                         if pd.notna(fecha_solicitud):
                             # Normalize both dates to timezone-naive
-                            fecha_solicitud_norm = to_colombia(fecha_solicitud)
+                            fecha_solicitud_colombia = to_colombia(fecha_solicitud)
                             fecha_actual_norm = now_colombia()
                             
-                            if fecha_solicitud_norm:
-                                tiempo_respuesta = (fecha_actual_norm - fecha_solicitud_norm).total_seconds() / (24 * 3600)
+                            if fecha_solicitud_colombia:
+                                tiempo_respuesta = (fecha_actual_norm - fecha_solicitud_colombia).total_seconds() / (24 * 3600)
                                 update_data['TiempoRespuestaDias'] = round(tiempo_respuesta, 2)
             
             # Update SharePoint list item
@@ -735,7 +734,7 @@ class SharePointListManager:
         return True
     
     def get_requests_summary(self) -> Dict[str, Any]:
-        """Get requests summary for dashboard - FIXED timezone handling"""
+        """Get requests summary for dashboard"""
         if self.df is None or self.df.empty:
             return {
                 'total_solicitudes': 0,
@@ -770,7 +769,7 @@ class SharePointListManager:
             por_proceso = self.df['proceso'].value_counts().to_dict()
             por_territorial = self.df['territorial'].value_counts().to_dict()
             
-            # Monthly distribution - FIXED timezone handling
+            # Monthly distribution
             df_copy = self.df.copy()
             
             # Ensure fecha_solicitud is timezone-naive before converting to period
@@ -778,13 +777,18 @@ class SharePointListManager:
                 # Normalize all datetime values first
                 df_copy['fecha_solicitud_colombia'] = df_copy['fecha_solicitud'].apply(to_colombia)
                 
-                # Convert to pandas datetime, ensuring timezone-naive
-                df_copy['fecha_solicitud_pd'] = pd.to_datetime(df_copy['fecha_solicitud_norm'], errors='coerce')
+                # Convert to pandas datetime, ensuring timezone-naive by removing timezone info
+                df_copy['fecha_solicitud_naive'] = df_copy['fecha_solicitud_colombia'].dt.tz_localize(None)
                 
                 # Create period only for non-null dates
-                mask = df_copy['fecha_solicitud_pd'].notna()
+                mask = df_copy['fecha_solicitud_naive'].notna()
                 if mask.any():
-                    df_copy.loc[mask, 'mes_solicitud'] = df_copy.loc[mask, 'fecha_solicitud_pd'].dt.to_period('M')
+                    # Suppress the timezone warning by using tz_localize(None)
+                    import warnings
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        df_copy.loc[mask, 'mes_solicitud'] = df_copy.loc[mask, 'fecha_solicitud_naive'].dt.to_period('M')
+                    
                     por_mes = df_copy['mes_solicitud'].value_counts().sort_index().to_dict()
                     por_mes = {str(k): v for k, v in por_mes.items() if pd.notna(k)}
                 else:
@@ -832,18 +836,3 @@ class SharePointListManager:
             'site_url': self.graph_config.get('sharepoint_site_url'),
             'target_drive_connected': bool(self.target_drive_id)
         }
-    
-    def to_colombia_time(dt):
-        """Convert any datetime to Colombian timezone"""
-        if dt is None:
-            return None
-        
-        try:
-            # If datetime is timezone-naive, assume UTC
-            if dt.tzinfo is None:
-                dt = pytz.utc.localize(dt)
-            
-            # Convert to Colombian time
-            return dt.astimezone(COLOMBIA_TZ)
-        except:
-            return dt
