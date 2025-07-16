@@ -439,7 +439,7 @@ def mostrar_alertas_sistema(data_manager):
     
     alertas = []
     
-    # Solicitudes antiguas sin actualizar (>7 días) - FIXED datetime handling
+    # Solicitudes antiguas sin actualizar (>7 días)
     fecha_limite = datetime.now() - timedelta(days=7)
     if 'fecha_actualizacion' in df.columns:
         try:
@@ -911,7 +911,7 @@ def mostrar_analisis_temporal(data_manager):
         fig.update_layout(
             height=400,
             margin=dict(t=50, b=0, l=0, r=0),
-            xaxis=dict(title="Mes"),
+            xaxis=dict(title=""),
             yaxis=dict(title="Número de Solicitudes",
                        tickmode='linear', 
                        dtick=1   
