@@ -124,6 +124,14 @@ def mostrar_tab_dashboard(data_manager):
         st.error("❌ Error de conexión con SharePoint Lists")
         return
     
+    # Get all data first - BEFORE applying filters
+    df_all = data_manager.get_all_requests()
+    
+    # Check if we have any data at all
+    if df_all.empty:
+        st.info("📋 No hay solicitudes registradas aún. ¡Registre la primera solicitud en la pestaña de Registro!")
+        return
+    
     st.markdown("---")
     st.subheader("🔧 Filtros Globales")
 
@@ -131,8 +139,7 @@ def mostrar_tab_dashboard(data_manager):
 
     with col1:
         # Get unique areas
-        df_all = data_manager.get_all_requests()
-        areas_disponibles = ["Todas"] + sorted(df_all['area'].dropna().unique().tolist()) if not df_all.empty else ["Todas"]
+        areas_disponibles = ["Todas"] + sorted(df_all['area'].dropna().unique().tolist())
         
         filtro_area_global = st.selectbox(
             "Filtrar por Área:",
@@ -142,7 +149,7 @@ def mostrar_tab_dashboard(data_manager):
 
     with col2:
         # Get unique processes
-        procesos_disponibles = ["Todos"] + sorted(df_all['proceso'].dropna().unique().tolist()) if not df_all.empty else ["Todos"]
+        procesos_disponibles = ["Todos"] + sorted(df_all['proceso'].dropna().unique().tolist())
         
         filtro_proceso_global = st.selectbox(
             "Filtrar por Proceso:",
@@ -164,9 +171,6 @@ def mostrar_tab_dashboard(data_manager):
     if filtro_proceso_global != "Todos":
         df_filtrado_global = df_filtrado_global[df_filtrado_global['proceso'] == filtro_proceso_global]
 
-    # Update data manager with filtered data for all subsequent operations
-    data_manager.df = df_filtrado_global
-
     # Show filtered results
     if not df_filtrado_global.empty:
         st.info(f"📊 Mostrando {len(df_filtrado_global)} de {len(df_all)} solicitudes")
@@ -174,23 +178,21 @@ def mostrar_tab_dashboard(data_manager):
         st.warning("⚠️ No se encontraron solicitudes con los filtros aplicados")
         return
 
-    # Obtener resumen de datos
-    if hasattr(data_manager, 'df') and data_manager.df is not None:
-        resumen = data_manager.get_requests_summary()
-    else:
-        st.warning("No hay datos disponibles")
-        return
+    # FIXED: Create a temporary data manager instance with filtered data for summary
+    # Don't modify the original data_manager.df
+    temp_data_manager = type('TempDataManager', (), {})()
+    temp_data_manager.df = df_filtrado_global
+    temp_data_manager.get_requests_summary = data_manager.get_requests_summary.__get__(temp_data_manager, type(temp_data_manager))
     
-    if resumen.get('total_solicitudes', 0) == 0:
-        st.info("📋 No hay solicitudes registradas aún. ¡Registre la primera solicitud en la pestaña de Registro!")
-        return
+    # Get summary from filtered data
+    resumen = temp_data_manager.get_requests_summary()
     
     # Show last update time
     last_update = now_colombia().strftime('%H:%M:%S')
     st.caption(f"📊 Última actualización: {last_update}")
     
-    # Mostrar alertas del sistema
-    mostrar_alertas_sistema(data_manager)
+    # Mostrar alertas del sistema - use filtered data
+    mostrar_alertas_sistema(temp_data_manager)
     
     # Métricas principales
     st.subheader("📈 Métricas Principales")
@@ -214,27 +216,27 @@ def mostrar_tab_dashboard(data_manager):
         mostrar_grafico_estados(resumen)
     
     with col2:
-        mostrar_grafico_prioridades(data_manager)
+        mostrar_grafico_prioridades(temp_data_manager)
     
     # Segunda fila de gráficos
     mostrar_grafico_tipos(resumen)
     
     # Tercera fila de gráficos
-    mostrar_grafico_procesos(data_manager)
+    mostrar_grafico_procesos(temp_data_manager)
         
     # Cuarta fila de gráficos
-    mostrar_grafico_territoriales(data_manager)
+    mostrar_grafico_territoriales(temp_data_manager)
     
     st.markdown("---")
     
     # Análisis temporal
-    mostrar_analisis_temporal(data_manager)
+    mostrar_analisis_temporal(temp_data_manager)
     
     st.markdown("---")
     
     # DataFrame Visualizer
-    mostrar_dataframe_visualizer(data_manager)
-    
+    mostrar_dataframe_visualizer(temp_data_manager)
+      
 def mostrar_dataframe_visualizer(data_manager):
     """Mostrar visualizador de DataFrame con filtros avanzados - SharePoint optimized"""
     st.subheader("🔍 Explorador de Datos")
