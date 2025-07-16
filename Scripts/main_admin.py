@@ -1,19 +1,19 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from sharepoint_list_manager import SharePointListManager
+from sharepoint_list_manager import GestorListasSharePoint
 from dashboard import mostrar_tab_dashboard
-from admin_solicitudes import mostrar_tab_admin
-from timezone_utils import now_colombia
+from admin_solicitudes import mostrar_tab_administrador
+from timezone_utils import obtener_fecha_actual_colombia
 
-# Page configuration
+# Configuración de página
 st.set_page_config(
     page_title="Sistema de Gestión de Solicitudes",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# CSS
+# CSS personalizado
 st.markdown("""
 <style>
     .main-header {
@@ -31,7 +31,6 @@ st.markdown("""
         border-left: 4px solid #0765a7;
         margin-bottom: 20px;
     }
-    /* ADD THIS NEW CSS CLASS */
     .footer {
         position: fixed;
         left: 0;
@@ -52,7 +51,7 @@ st.markdown("""
     .footer a:hover {
         text-decoration: underline;
     }
-    /* Add bottom margin to main content to avoid footer overlap */
+    /* Agregar margen inferior al contenido principal para evitar superposición con footer */
     .main .block-container {
         padding-bottom: 60px;
     }
@@ -60,66 +59,67 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 @st.cache_data(ttl=60)
-def get_cached_sharepoint_data():
-    """Get SharePoint data with caching"""
-    data_manager = get_data_manager()
-    data_manager.load_data()
-    return data_manager.df.copy() if data_manager.df is not None else pd.DataFrame()
+def obtener_datos_sharepoint_en_cache():
+    """Obtener datos SharePoint con caché"""
+    gestor_datos = obtener_gestor_datos()
+    gestor_datos.cargar_datos()
+    return gestor_datos.df.copy() if gestor_datos.df is not None else pd.DataFrame()
 
 @st.cache_resource
-def get_data_manager():
-    """Initialize SharePoint List Manager and cache it"""
+def obtener_gestor_datos():
+    """Inicializar Gestor de Listas SharePoint y guardarlo en caché"""
     try:
-        return SharePointListManager(list_name="Data App Solicitudes")
+        return GestorListasSharePoint(nombre_lista="Data App Solicitudes")
     except Exception as e:
-        st.error(f"Failed to initialize SharePoint List connection: {e}")
+        st.error(f"Error al inicializar conexión con Lista SharePoint: {e}")
         st.stop()
 
-def initialize_session_state():
-    """Initialize session state variables"""
-    if 'dashboard_authenticated' not in st.session_state:
-        st.session_state.dashboard_authenticated = False
-    if 'dashboard_usuario' not in st.session_state:
-        st.session_state.dashboard_usuario = None
-    if 'admin_authenticated' not in st.session_state:
-        st.session_state.admin_authenticated = False
-    if 'admin_proceso' not in st.session_state:
-        st.session_state.admin_proceso = None
-    if 'admin_usuario' not in st.session_state:
-        st.session_state.admin_usuario = None
+def inicializar_estado_sesion():
+    """Inicializar variables de estado de sesión"""
+    if 'dashboard_autenticado' not in st.session_state:
+        st.session_state.dashboard_autenticado = False
+    if 'usuario_dashboard' not in st.session_state:
+        st.session_state.usuario_dashboard = None
+    if 'admin_autenticado' not in st.session_state:
+        st.session_state.admin_autenticado = False
+    if 'proceso_admin' not in st.session_state:
+        st.session_state.proceso_admin = None
+    if 'usuario_admin' not in st.session_state:
+        st.session_state.usuario_admin = None
 
 def main():
+    """Función principal de la aplicación"""
 
-    # Initialize session state
-    initialize_session_state()
+    # Inicializar estado de sesión
+    inicializar_estado_sesion()
     
-    # Main title
+    # Título principal
     st.markdown("""
     <div class="main-header">
-        <h1> Sistema de Gestión de Solicitudes</h1>
+        <h1>📊 Sistema de Gestión de Solicitudes</h1>
     </div>
     """, unsafe_allow_html=True)
     
-    # Get data manager (cached)
-    data_manager = get_data_manager()
+    # Obtener gestor de datos (en caché)
+    gestor_datos = obtener_gestor_datos()
     
-    # Get cached data instead of always refreshing
-    cached_df = get_cached_sharepoint_data()
-    data_manager.df = cached_df  # Set the cached data
+    # Obtener datos en caché en lugar de refrescar siempre
+    df_en_cache = obtener_datos_sharepoint_en_cache()
+    gestor_datos.df = df_en_cache  # Establecer los datos en caché
     
-    # Show connection status
-    status = data_manager.get_sharepoint_status()
-    if not status['sharepoint_connected']:
-        st.error("❌ SharePoint List connection failed. Please check your configuration.")
+    # Mostrar estado de conexión
+    estado = gestor_datos.obtener_estado_sharepoint()
+    if not estado['sharepoint_conectado']:
+        st.error("❌ Falló conexión con Lista SharePoint. Por favor verifique su configuración.")
         st.stop()
 
-    # Show data freshness - simplified without get_stats()
-    if not cached_df.empty:
-        last_update = now_colombia().strftime('%H:%M:%S')
-        st.caption(f"📊 Datos en caché | Total solicitudes: {len(cached_df)} | Actualizado: {last_update} | Cache TTL: 60s")
+    # Mostrar frescura de datos - simplificado sin get_stats()
+    if not df_en_cache.empty:
+        ultima_actualizacion = obtener_fecha_actual_colombia().strftime('%H:%M:%S')
+        st.caption(f"📊 Datos en caché | Total solicitudes: {len(df_en_cache)} | Actualizado: {ultima_actualizacion} | Cache TTL: 60s")
     
     
-    # Create segmented control for navigation
+    # Crear control segmentado para navegación
     tab = st.segmented_control(
         "Navegación",
         ["⚙️ Administrar Solicitudes", "📊 Dashboard"],
@@ -128,17 +128,18 @@ def main():
         label_visibility="collapsed",
     )
     
-    # Show content based on segmented control selection  
+    # Mostrar contenido basado en selección del control segmentado  
     if tab == "⚙️ Administrar Solicitudes":
-        mostrar_tab_admin(data_manager)
+        mostrar_tab_administrador(gestor_datos)
     
     elif tab == "📊 Dashboard":
-        mostrar_tab_dashboard(data_manager)
+        mostrar_tab_dashboard(gestor_datos)
 
+    # Footer de la aplicación
     st.markdown("""
     <div class="footer">
         © 2025 Instituto Geográfico Agustín Codazzi (IGAC) - Todos los derechos reservados | 
-        Sistema de Gestión de Solicitudes v1.0
+        Sistema de Gestión de Solicitudes v2.0
     </div>
     """, unsafe_allow_html=True)
     

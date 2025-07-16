@@ -2,49 +2,49 @@ import pytz
 from datetime import datetime
 from typing import Optional
 
-# Colombian timezone
-COLOMBIA_TZ = pytz.timezone('America/Bogota')
+# Zona horaria de Colombia
+ZONA_HORARIA_COLOMBIA = pytz.timezone('America/Bogota')
 
-def now_colombia() -> datetime:
-    """Get current time in Colombian timezone"""
-    return datetime.now(COLOMBIA_TZ)
+def obtener_fecha_actual_colombia() -> datetime:
+    """Obtiene la fecha y hora actual en zona horaria de Colombia"""
+    return datetime.now(ZONA_HORARIA_COLOMBIA)
 
-def to_colombia(dt) -> Optional[datetime]:
-    """Convert any datetime to Colombian timezone"""
-    if dt is None:
+def convertir_a_colombia(fecha_hora) -> Optional[datetime]:
+    """Convierte cualquier datetime a zona horaria de Colombia"""
+    if fecha_hora is None:
         return None
     
     try:
-        # If datetime is timezone-naive, assume UTC
-        if dt.tzinfo is None:
-            dt = pytz.utc.localize(dt)
+        # Si el datetime no tiene zona horaria, asumir UTC
+        if fecha_hora.tzinfo is None:
+            fecha_hora = pytz.utc.localize(fecha_hora)
         
-        # Convert to Colombian time
-        return dt.astimezone(COLOMBIA_TZ)
+        # Convertir a hora colombiana
+        return fecha_hora.astimezone(ZONA_HORARIA_COLOMBIA)
     except:
-        return dt
+        return fecha_hora
 
-def to_utc_for_storage(dt) -> Optional[datetime]:
-    """Convert Colombian time to UTC for storage"""
-    if dt is None:
+def convertir_a_utc_para_almacenamiento(fecha_hora) -> Optional[datetime]:
+    """Convierte hora colombiana a UTC para almacenamiento en SharePoint"""
+    if fecha_hora is None:
         return None
     
     try:
-        # If timezone-naive, assume Colombian time
-        if dt.tzinfo is None:
-            dt = COLOMBIA_TZ.localize(dt)
+        # Si no tiene zona horaria, asumir hora colombiana
+        if fecha_hora.tzinfo is None:
+            fecha_hora = ZONA_HORARIA_COLOMBIA.localize(fecha_hora)
         
-        # Convert to UTC
-        return dt.astimezone(pytz.utc)
+        # Convertir a UTC
+        return fecha_hora.astimezone(pytz.utc)
     except:
-        return dt
+        return fecha_hora
 
-def format_colombia_time(dt, format_str='%d/%m/%Y %H:%M COT') -> str:
-    """Format datetime in Colombian timezone"""
-    if dt is None:
+def formatear_fecha_colombia(fecha_hora, formato='%d/%m/%Y %H:%M COT') -> str:
+    """Formatea datetime en zona horaria colombiana"""
+    if fecha_hora is None:
         return "N/A"
     
-    colombia_time = to_colombia(dt)
-    if colombia_time:
-        return colombia_time.strftime(format_str)
+    fecha_colombia = convertir_a_colombia(fecha_hora)
+    if fecha_colombia:
+        return fecha_colombia.strftime(formato)
     return "N/A"

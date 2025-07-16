@@ -3,11 +3,11 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-from timezone_utils import now_colombia, to_colombia, format_colombia_time
+from timezone_utils import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
 
 
 def mostrar_login_dashboard():
-    """Login interface for dashboard access"""
+    """Interfaz de login para acceso al dashboard"""
     st.markdown("### 🔐 Acceso al Dashboard")
     
     with st.form("dashboard_login"):
@@ -21,19 +21,19 @@ def mostrar_login_dashboard():
             
             if submitted:
                 if autenticar_dashboard(usuario, password):
-                    st.session_state.dashboard_authenticated = True
-                    st.session_state.dashboard_usuario = usuario
+                    st.session_state.dashboard_autenticado = True
+                    st.session_state.usuario_dashboard = usuario
                     st.success(f"✅ Bienvenido al Dashboard, {usuario}")
                     st.rerun()
                 else:
                     st.error("❌ Credenciales incorrectas")
     
-    # Show credentials
+    # Mostrar credenciales
     with st.expander("💡 Credenciales de Acceso"):
         st.write("**Dashboard Admin:** `dashboard_admin` / `dashboard2025`")
 
 def autenticar_dashboard(usuario, password):
-    """Authenticate dashboard credentials - single admin level"""
+    """Autenticar credenciales del dashboard - un solo nivel de administrador"""
     return usuario == "dashboard_admin" and password == "dashboard2025"
 
 def formatear_tiempo_dashboard(dias):
@@ -53,142 +53,141 @@ def formatear_tiempo_dashboard(dias):
     else:
         return f"{dias:.1f} días"
 
-def safe_datetime_operation(dt_series, operation='max'):
-    """Safely perform datetime operations on Series - UPDATED with timezone utils"""
+def operacion_datetime_segura(serie_dt, operacion='max'):
+    """Realizar operaciones datetime de manera segura en Series"""
     try:
-        if dt_series.empty or dt_series.isna().all():
+        if serie_dt.empty or serie_dt.isna().all():
             return None
         
-        # Convert to datetime and normalize timezone using utility
-        dt_clean = pd.to_datetime(dt_series, errors='coerce')
-        dt_clean = dt_clean.apply(to_colombia)
-        dt_clean = dt_clean.dropna()
+        # Convertir a datetime y normalizar zona horaria usando utilidad
+        dt_limpio = pd.to_datetime(serie_dt, errors='coerce')
+        dt_limpio = dt_limpio.apply(convertir_a_colombia)
+        dt_limpio = dt_limpio.dropna()
         
-        if dt_clean.empty:
+        if dt_limpio.empty:
             return None
             
-        if operation == 'max':
-            return dt_clean.max()
-        elif operation == 'min':
-            return dt_clean.min()
+        if operacion == 'max':
+            return dt_limpio.max()
+        elif operacion == 'min':
+            return dt_limpio.min()
         else:
-            return dt_clean
+            return dt_limpio
     except Exception as e:
-        print(f"Error in datetime operation: {e}")
+        print(f"Error en operación datetime: {e}")
         return None
 
-def mostrar_tab_dashboard(data_manager):
-    """Mostrar el tab del dashboard - SharePoint optimized with simple login"""
+def mostrar_tab_dashboard(gestor_datos):
+    """Mostrar el tab del dashboard - optimizado para SharePoint con login simple"""
     
-    # Check authentication first
-    if not st.session_state.get('dashboard_authenticated', False):
+    # Verificar autenticación primero
+    if not st.session_state.get('dashboard_autenticado', False):
         mostrar_login_dashboard()
         return
     
-    # SharePoint status
-    status = data_manager.get_sharepoint_status()
-    if not status['sharepoint_connected']:
+    # Estado de SharePoint
+    estado = gestor_datos.obtener_estado_sharepoint()
+    if not estado['sharepoint_conectado']:
         st.error("❌ Error de conexión con SharePoint Lists")
         return
     
-    # Get all data first - BEFORE applying filters
-    df_all = data_manager.get_all_requests()
+    # Obtener todos los datos primero - ANTES de aplicar filtros
+    df_todos = gestor_datos.obtener_todas_solicitudes()
     
-    # Check if we have any data at all
-    if df_all.empty:
+    # Verificar si tenemos datos
+    if df_todos.empty:
         st.info("📋 No hay solicitudes registradas aún. ¡Registre la primera solicitud en la pestaña de Registro!")
         return
 
-    # Header with logout option
+    # Header con opción de cerrar sesión
     col1, col2, col3 = st.columns([3, 1, 1])
     
     with col1:
         st.header("📊 Dashboard de Solicitudes")
-        usuario_actual = st.session_state.get('dashboard_usuario', 'Usuario')
+        usuario_actual = st.session_state.get('usuario_dashboard', 'Usuario')
         st.caption(f"👤 Sesión activa: {usuario_actual}")
     
     with col2:
         None
 
     with col3:
-        if st.button("Cerrar Sesión", key="logout_dashboard"):
-            st.session_state.dashboard_authenticated = False
-            st.session_state.dashboard_usuario = None
+        if st.button("Cerrar Sesión", key="cerrar_sesion_dashboard"):
+            st.session_state.dashboard_autenticado = False
+            st.session_state.usuario_dashboard = None
             st.rerun()
 
     st.markdown(" ")
 
-    if st.button("🔄 Actualizar Datos", key="refresh_dashboard"):
-        st.cache_data.clear()  # Clear the cache
+    if st.button("🔄 Actualizar Datos", key="actualizar_dashboard"):
+        st.cache_data.clear()  # Limpiar el cache
         st.rerun()
     
     st.markdown("---")
 
-    # Initialize or increment filter version for widget keys
-    if 'filter_version' not in st.session_state:
-        st.session_state.filter_version = 0
+    # Inicializar o incrementar versión de filtro para claves de widgets
+    if 'version_filtro' not in st.session_state:
+        st.session_state.version_filtro = 0
 
     col1, col2, col3 = st.columns([2, 3, 1])
 
     with col1:
-        # Get unique areas
-        areas_disponibles = ["Todas"] + sorted(df_all['area'].dropna().unique().tolist())
+        # Obtener áreas únicas
+        areas_disponibles = ["Todas"] + sorted(df_todos['area'].dropna().unique().tolist())
         
         filtro_area_global = st.selectbox(
             "Filtrar por Área:",
             options=areas_disponibles,
-            index=0,  # Always start with "Todas"
-            key=f"filtro_area_global_dashboard_{st.session_state.filter_version}"
+            index=0,  # Siempre empezar con "Todas"
+            key=f"filtro_area_global_dashboard_{st.session_state.version_filtro}"
         )
 
     with col2:
-        # Get unique processes
-        procesos_disponibles = ["Todos"] + sorted(df_all['proceso'].dropna().unique().tolist())
+        # Obtener procesos únicos
+        procesos_disponibles = ["Todos"] + sorted(df_todos['proceso'].dropna().unique().tolist())
         
         filtro_proceso_global = st.selectbox(
             "Filtrar por Proceso:",
             options=procesos_disponibles,
-            index=0,  # Always start with "Todos"
-            key=f"filtro_proceso_global_dashboard_{st.session_state.filter_version}"
+            index=0,  # Siempre empezar con "Todos"
+            key=f"filtro_proceso_global_dashboard_{st.session_state.version_filtro}"
         )
 
     with col3:
-        # Clear filters button
-        if st.button("🔄 Limpiar Filtros", key="clear_global_filters"):
-            # Increment version to create new widget instances
-            st.session_state.filter_version += 1
+        # Botón limpiar filtros
+        if st.button("🔄 Limpiar Filtros", key="limpiar_filtros_globales"):
+            # Incrementar versión para crear nuevas instancias de widgets
+            st.session_state.version_filtro += 1
             st.rerun()
 
-    # Apply global filters to data
-    df_filtrado_global = df_all.copy()
+    # Aplicar filtros globales a los datos
+    df_filtrado_global = df_todos.copy()
     if filtro_area_global != "Todas":
         df_filtrado_global = df_filtrado_global[df_filtrado_global['area'] == filtro_area_global]
     if filtro_proceso_global != "Todos":
         df_filtrado_global = df_filtrado_global[df_filtrado_global['proceso'] == filtro_proceso_global]
 
-    # Show filtered results
+    # Mostrar resultados filtrados
     if not df_filtrado_global.empty:
-        st.info(f"📊 Mostrando {len(df_filtrado_global)} de {len(df_all)} solicitudes")
+        st.info(f"📊 Mostrando {len(df_filtrado_global)} de {len(df_todos)} solicitudes")
     else:
         st.warning("⚠️ No se encontraron solicitudes con los filtros aplicados")
         return
 
-    # SIMPLER APPROACH: Temporarily set the data manager's df to filtered data
-    # Save original data
-    original_df = data_manager.df
+    # Guardar datos originales
+    df_original = gestor_datos.df
     
-    # Set filtered data
-    data_manager.df = df_filtrado_global
+    # Establecer datos filtrados
+    gestor_datos.df = df_filtrado_global
     
-    # Get summary from filtered data
-    resumen = data_manager.get_requests_summary()
+    # Obtener resumen de datos filtrados
+    resumen = gestor_datos.obtener_resumen_solicitudes()
     
-    # Show last update time
-    last_update = now_colombia().strftime('%H:%M:%S')
-    st.caption(f"📊 Última actualización: {last_update}")
+    # Mostrar hora de última actualización
+    ultima_actualizacion = obtener_fecha_actual_colombia().strftime('%H:%M:%S')
+    st.caption(f"📊 Última actualización: {ultima_actualizacion}")
     
     # Mostrar alertas del sistema
-    mostrar_alertas_sistema(data_manager)
+    mostrar_alertas_sistema(gestor_datos)
     
     # Métricas principales
     st.subheader("📈 Métricas Principales")
@@ -209,73 +208,73 @@ def mostrar_tab_dashboard(data_manager):
         mostrar_grafico_estados(resumen)
     
     with col2:
-        mostrar_grafico_prioridades(data_manager)
+        mostrar_grafico_prioridades(gestor_datos)
     
     # Segunda fila de gráficos
     mostrar_grafico_tipos(resumen)
     
     # Tercera fila de gráficos
-    mostrar_grafico_procesos(data_manager)
+    mostrar_grafico_procesos(gestor_datos)
         
     # Cuarta fila de gráficos
-    mostrar_grafico_territoriales(data_manager)
+    mostrar_grafico_territoriales(gestor_datos)
     
     st.markdown("---")
     
     # Análisis temporal
-    mostrar_analisis_temporal(data_manager)
+    mostrar_analisis_temporal(gestor_datos)
     
     st.markdown("---")
     
-    # DataFrame Visualizer
-    mostrar_dataframe_visualizer(data_manager)
+    # Visualizador de DataFrame
+    mostrar_visualizador_dataframe(gestor_datos)
     
-    # IMPORTANT: Restore original data at the end
-    data_manager.df = original_df
+    # IMPORTANTE: Restaurar datos originales al final
+    gestor_datos.df = df_original
 
-def mostrar_dataframe_visualizer(data_manager):
-    """Mostrar visualizador de DataFrame con filtros avanzados - SharePoint optimized"""
+def mostrar_visualizador_dataframe(gestor_datos):
+    """Mostrar visualizador de DataFrame con filtros avanzados - optimizado para SharePoint"""
     st.subheader("🔍 Explorador de Datos")
     
-    df = data_manager.get_all_requests()
+    df = gestor_datos.obtener_todas_solicitudes()
     
     if df.empty:
         st.info("📋 No hay datos disponibles para visualizar")
         return
            
-    # Advanced filters
+    # Filtros avanzados
     with st.expander("🔧 Filtros Avanzados", expanded=False):
         filter_col1, filter_col2, filter_col3 = st.columns(3)
         
         with filter_col1:
-            # Filter by estado
+            # Filtrar por estado
             estados_disponibles = ["Todos"] + list(df['estado'].unique())
-            estado_filtro = st.selectbox("Estado:", estados_disponibles)
+            filtro_estado = st.selectbox("Estado:", estados_disponibles)
             
-            # Filter by territorial
+            # Filtrar por territorial
             if 'territorial' in df.columns:
                 territoriales_disponibles = ["Todas"] + list(df['territorial'].unique())
-                territorial_filtro = st.selectbox("Territorial:", territoriales_disponibles)
+                filtro_territorial = st.selectbox("Territorial:", territoriales_disponibles)
             else:
-                territorial_filtro = "Todas"
+                filtro_territorial = "Todas"
         
         with filter_col2:
-            # Filter by proceso
+            # Filtrar por proceso
             areas_disponibles = ["Todas"] + list(df['proceso'].unique()) if 'proceso' in df.columns else ["Todas"]
-            area_filtro = st.selectbox("Proceso:", areas_disponibles)
+            filtro_area = st.selectbox("Proceso:", areas_disponibles)
             
-            # Filter by prioridad
+            # Filtrar por prioridad
             if 'prioridad' in df.columns:
                 prioridades_disponibles = ["Todas"] + list(df['prioridad'].unique())
-                prioridad_filtro = st.selectbox("Prioridad:", prioridades_disponibles)
+                filtro_prioridad = st.selectbox("Prioridad:", prioridades_disponibles)
             else:
-                prioridad_filtro = "Todas"
+                filtro_prioridad = "Todas"
         
         with filter_col3:
-            # Date range filter - UPDATED with timezone handling
+            # Filtro de rango de fechas
             if 'fecha_solicitud' in df.columns:
-                fecha_min_dt = safe_datetime_operation(df['fecha_solicitud'], 'min')
-                fecha_max_dt = safe_datetime_operation(df['fecha_solicitud'], 'max')
+                fecha_min_dt = operacion_datetime_segura(df['fecha_solicitud'], 'min')
+                fecha_max_dt = operacion_datetime_segura(df['fecha_solicitud'], 'max')
                 
                 if fecha_min_dt and fecha_max_dt:
                     fecha_min = fecha_min_dt.date()
@@ -288,36 +287,36 @@ def mostrar_dataframe_visualizer(data_manager):
             else:
                 fecha_desde = fecha_hasta = None
         
-        # Text search
+        # Búsqueda de texto
         busqueda_texto = st.text_input("🔍 Buscar en descripción o ID:", placeholder="Escriba aquí...")
     
-    # Apply filters
+    # Aplicar filtros
     df_filtrado = df.copy()
     
-    # Apply basic filters
-    if estado_filtro != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['estado'] == estado_filtro]
+    # Aplicar filtros básicos
+    if filtro_estado != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['estado'] == filtro_estado]
     
-    if territorial_filtro != "Todas" and 'territorial' in df_filtrado.columns:
-        df_filtrado = df_filtrado[df_filtrado['territorial'] == territorial_filtro]
+    if filtro_territorial != "Todas" and 'territorial' in df_filtrado.columns:
+        df_filtrado = df_filtrado[df_filtrado['territorial'] == filtro_territorial]
     
-    if area_filtro != "Todas" and 'proceso' in df_filtrado.columns:
-        df_filtrado = df_filtrado[df_filtrado['proceso'] == area_filtro]
+    if filtro_area != "Todas" and 'proceso' in df_filtrado.columns:
+        df_filtrado = df_filtrado[df_filtrado['proceso'] == filtro_area]
     
-    if prioridad_filtro != "Todas" and 'prioridad' in df_filtrado.columns:
-        df_filtrado = df_filtrado[df_filtrado['prioridad'] == prioridad_filtro]
+    if filtro_prioridad != "Todas" and 'prioridad' in df_filtrado.columns:
+        df_filtrado = df_filtrado[df_filtrado['prioridad'] == filtro_prioridad]
     
-    # Apply date filters - UPDATED with timezone handling
+    # Aplicar filtros de fecha
     if fecha_desde and fecha_hasta and 'fecha_solicitud' in df_filtrado.columns:
-        df_filtrado['fecha_solicitud_clean'] = df_filtrado['fecha_solicitud'].apply(to_colombia)
+        df_filtrado['fecha_solicitud_limpia'] = df_filtrado['fecha_solicitud'].apply(convertir_a_colombia)
         
         df_filtrado = df_filtrado[
-            (df_filtrado['fecha_solicitud_clean'].dt.date >= fecha_desde) &
-            (df_filtrado['fecha_solicitud_clean'].dt.date <= fecha_hasta)
+            (df_filtrado['fecha_solicitud_limpia'].dt.date >= fecha_desde) &
+            (df_filtrado['fecha_solicitud_limpia'].dt.date <= fecha_hasta)
         ]
-        df_filtrado = df_filtrado.drop('fecha_solicitud_clean', axis=1)
+        df_filtrado = df_filtrado.drop('fecha_solicitud_limpia', axis=1)
     
-    # Apply text search
+    # Aplicar búsqueda de texto
     if busqueda_texto:
         mask = (
             df_filtrado['id_solicitud'].str.contains(busqueda_texto, case=False, na=False) |
@@ -330,57 +329,56 @@ def mostrar_dataframe_visualizer(data_manager):
         st.warning("⚠️ No se encontraron solicitudes con los filtros aplicados")
         return
     
-    # Column selection for display
+    # Selección de columnas para mostrar
     with st.expander("📋 Seleccionar Columnas a Mostrar", expanded=False):
-        available_columns = list(df_filtrado.columns)
+        columnas_disponibles = list(df_filtrado.columns)
         
-        # Default important columns
-        default_columns = [
+        # Columnas importantes por defecto
+        columnas_predeterminadas = [
             'id_solicitud', 'nombre_solicitante', 'estado', 'tipo_solicitud',
             'fecha_solicitud', 'territorial', 'proceso', 'prioridad'
         ]
         
-        # Filter default columns to only include those that exist
-        default_columns = [col for col in default_columns if col in available_columns]
+        # Filtrar columnas predeterminadas para incluir solo las que existen
+        columnas_predeterminadas = [col for col in columnas_predeterminadas if col in columnas_disponibles]
         
-        # Multi-select for columns
-        selected_columns = st.multiselect(
+        # Multi-select para columnas
+        columnas_seleccionadas = st.multiselect(
             "Columnas a mostrar:",
-            options=available_columns,
-            default=default_columns,
+            options=columnas_disponibles,
+            default=columnas_predeterminadas,
             help="Seleccione las columnas que desea visualizar"
         )
         
-        if not selected_columns:
-            selected_columns = default_columns
+        if not columnas_seleccionadas:
+            columnas_seleccionadas = columnas_predeterminadas
 
+    max_filas = st.selectbox("📏 Filas a mostrar", [10, 25, 50, 100, "Todas"], index=1)
 
-    max_rows = st.selectbox("📏 Filas a mostrar", [10, 25, 50, 100, "Todas"], index=1)
-
-    # Apply row limit
-    if max_rows != "Todas":
-        df_display = df_filtrado[selected_columns].head(max_rows)
+    # Aplicar límite de filas
+    if max_filas != "Todas":
+        df_mostrar = df_filtrado[columnas_seleccionadas].head(max_filas)
     else:
-        df_display = df_filtrado[selected_columns]
+        df_mostrar = df_filtrado[columnas_seleccionadas]
      
-    # Format dates for better display - UPDATED with timezone handling
-    df_display_formatted = df_display.copy()
+    # Formatear fechas para mejor visualización
+    df_mostrar_formateado = df_mostrar.copy()
     
-    # Handle datetime columns safely
-    for col in df_display_formatted.columns:
-        if 'fecha' in col.lower() and col in df_display_formatted.columns:
+    # Manejar columnas datetime de manera segura
+    for col in df_mostrar_formateado.columns:
+        if 'fecha' in col.lower() and col in df_mostrar_formateado.columns:
             try:
-                df_col = df_display_formatted[col]
+                df_col = df_mostrar_formateado[col]
                 if pd.api.types.is_datetime64_any_dtype(df_col):
-                    # Format using timezone utility
-                    df_display_formatted[col] = df_col.apply(lambda x: format_colombia_time(x) if pd.notna(x) else "N/A")
+                    # Formatear usando utilidad de zona horaria
+                    df_mostrar_formateado[col] = df_col.apply(lambda x: formatear_fecha_colombia(x) if pd.notna(x) else "N/A")
             except Exception as e:
-                print(f"Error formatting column {col}: {e}")
+                print(f"Error formateando columna {col}: {e}")
                 continue
     
-    # Use st.dataframe with interactive features
+    # Usar st.dataframe con características interactivas
     st.dataframe(
-        df_display_formatted,
+        df_mostrar_formateado,
         use_container_width=True,
         height=400,
         column_config={
@@ -392,10 +390,10 @@ def mostrar_dataframe_visualizer(data_manager):
         }
     )
 
-    # Show filtered results count
+    # Mostrar contador de resultados filtrados
     st.info(f"📊 Mostrando {len(df_filtrado)} de {len(df)} solicitudes")
 
-    # Quick stats for filtered data
+    # Estadísticas rápidas para datos filtrados
     if len(df_filtrado) > 0:
         st.markdown("---")
         st.markdown("### 📈 Estadísticas de Datos Filtrados")
@@ -424,24 +422,24 @@ def mostrar_dataframe_visualizer(data_manager):
                 territorial_mas_activa = df_filtrado['territorial'].mode().iloc[0] if not df_filtrado['territorial'].empty else "N/A"
                 st.metric("Territorial Más Activa", territorial_mas_activa)
 
-def mostrar_alertas_sistema(data_manager):
-    """Mostrar alertas del sistema - UPDATED with timezone handling"""
-    df = data_manager.get_all_requests()
+def mostrar_alertas_sistema(gestor_datos):
+    """Mostrar alertas del sistema"""
+    df = gestor_datos.obtener_todas_solicitudes()
     
     if df.empty:
         return
     
     alertas = []
     
-    # Solicitudes antiguas sin actualizar (>7 días) - UPDATED with timezone handling
-    fecha_limite = now_colombia() - timedelta(days=7)
+    # Solicitudes antiguas sin actualizar (>7 días)
+    fecha_limite = obtener_fecha_actual_colombia() - timedelta(days=7)
     if 'fecha_actualizacion' in df.columns:
         try:
-            # Use timezone utility for comparison
-            df['fecha_actualizacion_clean'] = df['fecha_actualizacion'].apply(to_colombia)
+            # Usar utilidad de zona horaria para comparación
+            df['fecha_actualizacion_limpia'] = df['fecha_actualizacion'].apply(convertir_a_colombia)
             
             solicitudes_antiguas = df[
-                (df['fecha_actualizacion_clean'] < fecha_limite) & 
+                (df['fecha_actualizacion_limpia'] < fecha_limite) & 
                 (df['estado'] != 'Completado')
             ]
             
@@ -453,7 +451,7 @@ def mostrar_alertas_sistema(data_manager):
                     'detalle': list(solicitudes_antiguas['id_solicitud'].head(5))
                 })
         except Exception as e:
-            print(f"Error checking old requests: {e}")
+            print(f"Error verificando solicitudes antiguas: {e}")
     
     # Solicitudes de alta prioridad asignadas
     if 'prioridad' in df.columns:
@@ -479,7 +477,7 @@ def mostrar_alertas_sistema(data_manager):
                 st.error(f"**{alerta['titulo']}**: {alerta['mensaje']}")
         
 def mostrar_metricas_principales(resumen):
-    """Mostrar métricas principales en cards"""
+    """Mostrar métricas principales en tarjetas"""
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -504,7 +502,7 @@ def mostrar_metricas_principales(resumen):
         )
 
 def mostrar_metricas_tiempo(resumen):
-    """Mostrar métricas principales en cards"""
+    """Mostrar métricas de tiempo en tarjetas"""
     col1, col2, col3 = st.columns(3)
         
     with col1:
@@ -538,9 +536,9 @@ def mostrar_metricas_tiempo(resumen):
 def mostrar_grafico_estados(resumen):
     """Mostrar gráfico de distribución por estados"""
     
-    estados_data = resumen['solicitudes_por_estado']
+    datos_estados = resumen['solicitudes_por_estado']
     
-    if estados_data:
+    if datos_estados:
         # Colores personalizados para cada estado
         colores = {
             'Asignada': '#FFA726',
@@ -551,10 +549,10 @@ def mostrar_grafico_estados(resumen):
         
         fig = go.Figure(data=[
             go.Pie(
-                labels=list(estados_data.keys()),
-                values=list(estados_data.values()),
+                labels=list(datos_estados.keys()),
+                values=list(datos_estados.values()),
                 hole=0.4,
-                marker=dict(colors=[colores.get(k, '#CCCCCC') for k in estados_data.keys()]),
+                marker=dict(colors=[colores.get(k, '#CCCCCC') for k in datos_estados.keys()]),
                 textinfo='label+percent',
                 textposition='outside',
                 hovertemplate='<b>%{label}</b><br>Cantidad: %{value}<br>Porcentaje: %{percent}<extra></extra>'
@@ -576,21 +574,21 @@ def mostrar_grafico_estados(resumen):
 def mostrar_grafico_tipos(resumen):
     """Mostrar gráfico de solicitudes por tipo (excluyendo 'Otro')"""
     
-    tipos_data = resumen['solicitudes_por_tipo']
+    datos_tipos = resumen['solicitudes_por_tipo']
     
-    if tipos_data:
+    if datos_tipos:
         # Filtrar "Otro" antes de ordenar
-        tipos_filtrados = {k: v for k, v in tipos_data.items() if k != "Otro"}
+        tipos_filtrados = {k: v for k, v in datos_tipos.items() if k != "Otro"}
         
         # Tomar solo los top 8 para mejor visualización (después de filtrar)
-        tipos_sorted = dict(sorted(tipos_filtrados.items(), key=lambda x: x[1], reverse=True)[:8])
+        tipos_ordenados = dict(sorted(tipos_filtrados.items(), key=lambda x: x[1], reverse=True)[:8])
         
-        if tipos_sorted:  # Verificar que hay datos después del filtro
+        if tipos_ordenados:  # Verificar que hay datos después del filtro
             fig = px.bar(
-                x=list(tipos_sorted.values()),
-                y=list(tipos_sorted.keys()),
+                x=list(tipos_ordenados.values()),
+                y=list(tipos_ordenados.keys()),
                 orientation='h',
-                color=list(tipos_sorted.values()),
+                color=list(tipos_ordenados.values()),
                 color_continuous_scale='Viridis'
             )
             
@@ -616,18 +614,18 @@ def mostrar_grafico_tipos(resumen):
     else:
         st.info("No hay datos disponibles")
 
-def mostrar_grafico_prioridades(data_manager):
+def mostrar_grafico_prioridades(gestor_datos):
     """Mostrar gráfico de distribución por prioridades en orden específico"""
    
-    df = data_manager.get_all_requests()
+    df = gestor_datos.obtener_todas_solicitudes()
     
     if not df.empty and 'prioridad' in df.columns:
         # Definir el orden deseado
         orden_prioridades = ['Por definir', 'Baja', 'Media', 'Alta']
         
         # Obtener conteos y reindexar en el orden deseado
-        prioridades_data = df['prioridad'].value_counts()
-        prioridades_ordenadas = prioridades_data.reindex(orden_prioridades, fill_value=0)
+        datos_prioridades = df['prioridad'].value_counts()
+        prioridades_ordenadas = datos_prioridades.reindex(orden_prioridades, fill_value=0)
         
         colores_prioridad = {
             'Alta': '#d32f2f',
@@ -664,21 +662,21 @@ def mostrar_grafico_prioridades(data_manager):
     else:
         st.info("No hay datos disponibles")
 
-def mostrar_grafico_procesos(data_manager):
+def mostrar_grafico_procesos(gestor_datos):
     """Mostrar análisis por proceso (nueva estructura)"""
   
-    df = data_manager.get_all_requests()
+    df = gestor_datos.obtener_todas_solicitudes()
     
     if not df.empty and 'proceso' in df.columns:
         # Obtener conteo de solicitudes por proceso
-        proceso_data = df['proceso'].value_counts().head(10)  # Top 10 procesos
+        datos_proceso = df['proceso'].value_counts().head(10)  # Top 10 procesos
         
-        if not proceso_data.empty:
+        if not datos_proceso.empty:
             fig = px.bar(
-                x=proceso_data.values,
-                y=proceso_data.index,
+                x=datos_proceso.values,
+                y=datos_proceso.index,
                 orientation='h',
-                color=proceso_data.values,
+                color=datos_proceso.values,
                 color_continuous_scale='Blues'
             )
             
@@ -709,18 +707,18 @@ def mostrar_grafico_procesos(data_manager):
     else:
         st.info("No hay datos disponibles por proceso")
 
-def mostrar_grafico_territoriales(data_manager):
+def mostrar_grafico_territoriales(gestor_datos):
     """Mostrar gráfico de solicitudes por territorial"""
-    df = data_manager.get_all_requests()
+    df = gestor_datos.obtener_todas_solicitudes()
     
     if not df.empty and 'territorial' in df.columns:
-        territorial_data = df['territorial'].value_counts().head(15)  # Top 15 para mejor visualización
+        datos_territorial = df['territorial'].value_counts().head(15)  # Top 15 para mejor visualización
         
         fig = px.bar(
-            x=territorial_data.values,
-            y=territorial_data.index,
+            x=datos_territorial.values,
+            y=datos_territorial.index,
             orientation='h',
-            color=territorial_data.values,
+            color=datos_territorial.values,
             color_continuous_scale='Viridis'
         )
         
@@ -748,22 +746,22 @@ def mostrar_grafico_territoriales(data_manager):
     else:
         st.info("No hay datos disponibles")
 
-def mostrar_analisis_temporal(data_manager):
+def mostrar_analisis_temporal(gestor_datos):
     """Mostrar análisis temporal"""
     st.subheader("📈 Análisis Temporal")
     
-    df = data_manager.get_all_requests()
+    df = gestor_datos.obtener_todas_solicitudes()
     
     if df.empty or 'fecha_solicitud' not in df.columns:
         st.info("No hay datos suficientes para el análisis temporal")
         return
     
     try:
-        # Clean datetime column using timezone utility
-        df['fecha_solicitud_clean'] = df['fecha_solicitud'].apply(to_colombia)
+        # Limpiar columna datetime usando utilidad de zona horaria
+        df['fecha_solicitud_limpia'] = df['fecha_solicitud'].apply(convertir_a_colombia)
         
-        # Remove timezone info to avoid pandas warnings
-        df['fecha_solicitud_naive'] = df['fecha_solicitud_clean'].dt.tz_localize(None)
+        # Remover información de zona horaria para evitar advertencias de pandas
+        df['fecha_solicitud_naive'] = df['fecha_solicitud_limpia'].dt.tz_localize(None)
         
         # Selector para agrupar por estado o prioridad
         col1, col2 = st.columns([1, 3])
@@ -779,18 +777,18 @@ def mostrar_analisis_temporal(data_manager):
             periodo_temporal = st.selectbox(
                 "Período:",
                 options=["Día", "Mes", "Trimestre"],
-                index=1,  # Default to "Mes"
+                index=1,  # Por defecto "Mes"
                 key="periodo_temporal"
             )
         
-        # Suppress pandas warnings for period conversion
+        # Suprimir advertencias de pandas para conversión de período
         import warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             
             # Gráfico de solicitudes por período
             if agrupacion == "Estado":
-                # Create period column based on selection
+                # Crear columna de período basada en selección
                 if periodo_temporal == "Día":
                     df['periodo'] = df['fecha_solicitud_naive'].dt.to_period('D')
                     titulo_periodo = "Día"
@@ -891,7 +889,7 @@ def mostrar_analisis_temporal(data_manager):
             if 'tiempo_resolucion_dias' in df.columns:
                 completadas = df[df['estado'] == 'Completado'].copy()
                 if not completadas.empty:
-                    # Use same period selection for resolution time
+                    # Usar misma selección de período para tiempo de resolución
                     if periodo_temporal == "Día":
                         completadas['periodo_resolucion'] = completadas['fecha_solicitud_naive'].dt.to_period('D')
                     elif periodo_temporal == "Mes":
@@ -949,4 +947,4 @@ def mostrar_analisis_temporal(data_manager):
                     
     except Exception as e:
         st.error(f"Error en análisis temporal: {e}")
-        print(f"Temporal analysis error: {e}")
+        print(f"Error análisis temporal: {e}")
