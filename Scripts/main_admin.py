@@ -59,19 +59,19 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 @st.cache_data(ttl=60)
-def obtener_datos_sharepoint():
-    """Obtener datos SharePoint con caché simple"""
-    gestor = obtener_gestor_datos()
-    gestor.cargar_datos()
-    return gestor.df.copy() if gestor.df is not None else pd.DataFrame()
+def obtener_datos_sharepoint_en_cache():
+    """Obtener datos SharePoint con caché"""
+    gestor_datos = obtener_gestor_datos()
+    gestor_datos.cargar_datos()
+    return gestor_datos.df.copy() if gestor_datos.df is not None else pd.DataFrame()
 
 @st.cache_resource
 def obtener_gestor_datos():
-    """Inicializar Gestor SharePoint"""
+    """Inicializar Gestor de Listas SharePoint y guardarlo en caché"""
     try:
         return GestorListasSharePoint(nombre_lista="Data App Solicitudes")
     except Exception as e:
-        st.error(f"Error al inicializar SharePoint: {e}")
+        st.error(f"Error al inicializar conexión con Lista SharePoint: {e}")
         st.stop()
 
 def inicializar_estado_sesion():
