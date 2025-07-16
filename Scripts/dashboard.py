@@ -119,8 +119,8 @@ def mostrar_tab_dashboard(data_manager):
     st.markdown(" ")
 
     if st.button("🔄 Actualizar Datos", key="refresh_dashboard"):
-            data_manager.load_data(force_reload=True)
-            st.rerun()
+        st.cache_data.clear()  # Clear the cache
+        st.rerun()
     
     st.markdown("---")
 
