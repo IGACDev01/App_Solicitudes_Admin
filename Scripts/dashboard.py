@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
+from timezone_utils import now_colombia, to_colombia, format_colombia_time
 
 
 def mostrar_login_dashboard():
@@ -53,14 +54,14 @@ def formatear_tiempo_dashboard(dias):
         return f"{dias:.1f} días"
 
 def safe_datetime_operation(dt_series, operation='max'):
-    """Safely perform datetime operations on Series"""
+    """Safely perform datetime operations on Series - UPDATED with timezone utils"""
     try:
         if dt_series.empty or dt_series.isna().all():
             return None
         
-        # Convert to datetime if needed and remove timezone info
+        # Convert to datetime and normalize timezone using utility
         dt_clean = pd.to_datetime(dt_series, errors='coerce')
-        dt_clean = dt_clean.dt.tz_localize(None) if dt_clean.dt.tz is not None else dt_clean
+        dt_clean = dt_clean.apply(to_colombia)
         dt_clean = dt_clean.dropna()
         
         if dt_clean.empty:
@@ -185,7 +186,7 @@ def mostrar_tab_dashboard(data_manager):
         return
     
     # Show last update time
-    last_update = datetime.now().strftime('%H:%M:%S')
+    last_update = now_colombia().strftime('%H:%M:%S')
     st.caption(f"📊 Última actualización: {last_update}")
     
     # Mostrar alertas del sistema
@@ -273,7 +274,7 @@ def mostrar_dataframe_visualizer(data_manager):
                 prioridad_filtro = "Todas"
         
         with filter_col3:
-            # Date range filter
+            # Date range filter - UPDATED with timezone handling
             if 'fecha_solicitud' in df.columns:
                 fecha_min_dt = safe_datetime_operation(df['fecha_solicitud'], 'min')
                 fecha_max_dt = safe_datetime_operation(df['fecha_solicitud'], 'max')
@@ -308,11 +309,9 @@ def mostrar_dataframe_visualizer(data_manager):
     if prioridad_filtro != "Todas" and 'prioridad' in df_filtrado.columns:
         df_filtrado = df_filtrado[df_filtrado['prioridad'] == prioridad_filtro]
     
-    # Apply date filters
+    # Apply date filters - UPDATED with timezone handling
     if fecha_desde and fecha_hasta and 'fecha_solicitud' in df_filtrado.columns:
-        df_filtrado['fecha_solicitud_clean'] = pd.to_datetime(df_filtrado['fecha_solicitud'], errors='coerce')
-        if df_filtrado['fecha_solicitud_clean'].dt.tz is not None:
-            df_filtrado['fecha_solicitud_clean'] = df_filtrado['fecha_solicitud_clean'].dt.tz_localize(None)
+        df_filtrado['fecha_solicitud_clean'] = df_filtrado['fecha_solicitud'].apply(to_colombia)
         
         df_filtrado = df_filtrado[
             (df_filtrado['fecha_solicitud_clean'].dt.date >= fecha_desde) &
@@ -366,7 +365,7 @@ def mostrar_dataframe_visualizer(data_manager):
     else:
         df_display = df_filtrado[selected_columns]
      
-    # Format dates for better display
+    # Format dates for better display - UPDATED with timezone handling
     df_display_formatted = df_display.copy()
     
     # Handle datetime columns safely
@@ -375,11 +374,8 @@ def mostrar_dataframe_visualizer(data_manager):
             try:
                 df_col = df_display_formatted[col]
                 if pd.api.types.is_datetime64_any_dtype(df_col):
-                    # Remove timezone info and format
-                    df_col_clean = pd.to_datetime(df_col, errors='coerce')
-                    if df_col_clean.dt.tz is not None:
-                        df_col_clean = df_col_clean.dt.tz_localize(None)
-                    df_display_formatted[col] = df_col_clean.dt.strftime('%d/%m/%Y %H:%M')
+                    # Format using timezone utility
+                    df_display_formatted[col] = df_col.apply(lambda x: format_colombia_time(x) if pd.notna(x) else "N/A")
             except Exception as e:
                 print(f"Error formatting column {col}: {e}")
                 continue
@@ -431,7 +427,7 @@ def mostrar_dataframe_visualizer(data_manager):
                 st.metric("Territorial Más Activa", territorial_mas_activa)
 
 def mostrar_alertas_sistema(data_manager):
-    """Mostrar alertas del sistema - SharePoint optimized"""
+    """Mostrar alertas del sistema - UPDATED with timezone handling"""
     df = data_manager.get_all_requests()
     
     if df.empty:
@@ -439,14 +435,12 @@ def mostrar_alertas_sistema(data_manager):
     
     alertas = []
     
-    # Solicitudes antiguas sin actualizar (>7 días)
-    fecha_limite = datetime.now() - timedelta(days=7)
+    # Solicitudes antiguas sin actualizar (>7 días) - UPDATED with timezone handling
+    fecha_limite = now_colombia() - timedelta(days=7)
     if 'fecha_actualizacion' in df.columns:
         try:
-            # Clean datetime column
-            df['fecha_actualizacion_clean'] = pd.to_datetime(df['fecha_actualizacion'], errors='coerce')
-            if df['fecha_actualizacion_clean'].dt.tz is not None:
-                df['fecha_actualizacion_clean'] = df['fecha_actualizacion_clean'].dt.tz_localize(None)
+            # Use timezone utility for comparison
+            df['fecha_actualizacion_clean'] = df['fecha_actualizacion'].apply(to_colombia)
             
             solicitudes_antiguas = df[
                 (df['fecha_actualizacion_clean'] < fecha_limite) & 
@@ -792,7 +786,7 @@ def mostrar_grafico_territoriales(data_manager):
         st.info("No hay datos disponibles")
 
 def mostrar_analisis_temporal(data_manager):
-    """Mostrar análisis temporal"""
+    """Mostrar análisis temporal - UPDATED with timezone handling"""
     st.subheader("📈 Análisis Temporal")
     
     df = data_manager.get_all_requests()
@@ -802,10 +796,8 @@ def mostrar_analisis_temporal(data_manager):
         return
     
     try:
-        # Clean datetime column
-        df['fecha_solicitud_clean'] = pd.to_datetime(df['fecha_solicitud'], errors='coerce')
-        if df['fecha_solicitud_clean'].dt.tz is not None:
-            df['fecha_solicitud_clean'] = df['fecha_solicitud_clean'].dt.tz_localize(None)
+        # Clean datetime column using timezone utility
+        df['fecha_solicitud_clean'] = df['fecha_solicitud'].apply(to_colombia)
         
         # Create month column
         df['mes_solicitud'] = df['fecha_solicitud_clean'].dt.to_period('M')
@@ -927,7 +919,7 @@ def mostrar_analisis_temporal(data_manager):
         
         st.plotly_chart(fig, use_container_width=True)
         
-        # Gráfico de tiempo promedio de resolución por mes
+        # Gráfico de tiempo promedio de resolución por mes - UPDATED with timezone handling
         if 'tiempo_resolucion_dias' in df.columns:
             completadas = df[df['estado'] == 'Completado'].copy()
             if not completadas.empty:

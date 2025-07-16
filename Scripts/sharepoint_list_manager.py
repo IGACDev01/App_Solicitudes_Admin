@@ -4,14 +4,10 @@ import streamlit as st
 import uuid
 from datetime import datetime, timedelta
 import requests
-import json
 from typing import Dict, Any, Optional, List
 from urllib.parse import quote
 import pytz
-
-# Colombian timezone
-COLOMBIA_TZ = pytz.timezone('America/Bogota')
-
+from timezone_utils import now_colombia, to_colombia, to_utc_for_storage, format_colombia_time
 
 class SharePointListManager:
     def __init__(self, list_name: str = "Data App Solicitudes"):
@@ -273,32 +269,13 @@ class SharePointListManager:
         self.load_data()
     
     def _normalize_datetime(self, dt) -> Optional[datetime]:
-        """Normalize datetime to timezone-naive for consistent handling"""
+        """Normalize datetime to timezone-naive for consistent handling - UPDATED"""
         if dt is None:
             return None
         
         try:
-            # If it's a pandas Timestamp
-            if hasattr(dt, 'tz_localize'):
-                if dt.tz is not None:
-                    return dt.tz_localize(None).to_pydatetime()
-                return dt.to_pydatetime()
-            
-            # If it's a datetime object
-            if hasattr(dt, 'tzinfo'):
-                if dt.tzinfo is not None:
-                    return dt.replace(tzinfo=None)
-                return dt
-            
-            # If it's a string, parse it
-            if isinstance(dt, str):
-                parsed = pd.to_datetime(dt, errors='coerce')
-                if pd.notna(parsed):
-                    if parsed.tz is not None:
-                        return parsed.tz_localize(None).to_pydatetime()
-                    return parsed.to_pydatetime()
-            
-            return dt
+            # Use timezone utility for consistency
+            return to_colombia(dt)
         except Exception as e:
             print(f"Error normalizing datetime {dt}: {e}")
             return None
@@ -400,7 +377,7 @@ class SharePointListManager:
             id_solicitud = str(uuid.uuid4())[:8].upper()
             
             # Prepare SharePoint list item
-            current_time = datetime.now().isoformat() + 'Z'
+            current_time_utc = to_utc_for_storage(now_colombia()).isoformat() + 'Z'
             
             list_item = {
                 'fields': {
@@ -408,7 +385,7 @@ class SharePointListManager:
                     'Territorial': datos_solicitud['territorial'],
                     'NombreSolicitante': datos_solicitud['nombre'],
                     'EmailSolicitante': datos_solicitud['email'],
-                    'FechaSolicitud': current_time,
+                    'FechaSolicitud': current_time_utc,
                     'TipoSolicitud': datos_solicitud['tipo'],
                     'Area': datos_solicitud['area'],
                     'Proceso': datos_solicitud['proceso'],
@@ -416,7 +393,7 @@ class SharePointListManager:
                     'Descripcion': datos_solicitud['descripcion'],
                     'Estado': 'Asignada',
                     'ResponsableAsignado': '',
-                    'FechaActualizacion': current_time,
+                    'FechaActualizacion': current_time_utc,
                     'TiempoRespuestaDias': 0,
                     'TiempoResolucionDias': 0
                 }
@@ -460,12 +437,12 @@ class SharePointListManager:
             if not headers.get('Authorization'):
                 return False
             
-            current_time = datetime.now().isoformat() + 'Z'
+            current_time_utc = to_utc_for_storage(now_colombia()).isoformat() + 'Z'
             
             # Prepare update data
             update_data = {
                 'Estado': nuevo_estado,
-                'FechaActualizacion': current_time
+                'FechaActualizacion': current_time_utc
             }
             
             if responsable:
@@ -476,7 +453,7 @@ class SharePointListManager:
             
             # Handle completion
             if nuevo_estado == 'Completado':
-                update_data['FechaCompletado'] = current_time
+                update_data['FechaCompletado'] = current_time_utc
                 
                 # Calculate resolution time - FIXED timezone handling
                 original_item = self.get_request_by_id(id_solicitud)
@@ -484,8 +461,8 @@ class SharePointListManager:
                     fecha_solicitud = original_item.iloc[0]['fecha_solicitud']
                     if pd.notna(fecha_solicitud):
                         # Normalize both dates to timezone-naive
-                        fecha_solicitud_norm = self._normalize_datetime(fecha_solicitud)
-                        fecha_actual_norm = datetime.now()
+                        fecha_solicitud_norm = to_colombia(fecha_solicitud)
+                        fecha_actual_norm = now_colombia()
                         
                         if fecha_solicitud_norm:
                             tiempo_resolucion = (fecha_actual_norm - fecha_solicitud_norm).total_seconds() / (24 * 3600)
@@ -500,8 +477,8 @@ class SharePointListManager:
                         fecha_solicitud = original_item.iloc[0]['fecha_solicitud']
                         if pd.notna(fecha_solicitud):
                             # Normalize both dates to timezone-naive
-                            fecha_solicitud_norm = self._normalize_datetime(fecha_solicitud)
-                            fecha_actual_norm = datetime.now()
+                            fecha_solicitud_norm = to_colombia(fecha_solicitud)
+                            fecha_actual_norm = now_colombia()
                             
                             if fecha_solicitud_norm:
                                 tiempo_respuesta = (fecha_actual_norm - fecha_solicitud_norm).total_seconds() / (24 * 3600)
@@ -536,12 +513,12 @@ class SharePointListManager:
             if not headers.get('Authorization'):
                 return False
             
-            current_time = datetime.now().isoformat() + 'Z'
+            current_time_utc = to_utc_for_storage(now_colombia()).isoformat() + 'Z'
             
             # Prepare update data
             update_data = {
                 'Prioridad': nueva_prioridad,
-                'FechaActualizacion': current_time
+                'FechaActualizacion': current_time_utc
             }
             
             # Update SharePoint list item
@@ -799,7 +776,7 @@ class SharePointListManager:
             # Ensure fecha_solicitud is timezone-naive before converting to period
             if 'fecha_solicitud' in df_copy.columns:
                 # Normalize all datetime values first
-                df_copy['fecha_solicitud_norm'] = df_copy['fecha_solicitud'].apply(self._normalize_datetime)
+                df_copy['fecha_solicitud_colombia'] = df_copy['fecha_solicitud'].apply(to_colombia)
                 
                 # Convert to pandas datetime, ensuring timezone-naive
                 df_copy['fecha_solicitud_pd'] = pd.to_datetime(df_copy['fecha_solicitud_norm'], errors='coerce')

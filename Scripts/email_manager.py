@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 import os
 from dotenv import load_dotenv
+from timezone_utils import now_colombia, to_colombia, format_colombia_time
 
 APP_URL = "https://appsolicitudes-h72izekvzacukoykxwnfqb.streamlit.app/"
 
@@ -278,7 +279,7 @@ class EmailManager:
                     <div class="status-box">
                         <h3>🎯 Nuevo Estado</h3>
                         <h2>{estado_emoji.get(nuevo_estado, '🔹')} {nuevo_estado}</h2>
-                        <p><strong>Actualizado:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+                        <p><strong>Actualizado:</strong> {now_colombia().strftime('%d/%m/%Y %H:%M')}</p>
                     </div>
                     
                     {f'''
@@ -402,7 +403,7 @@ class EmailManager:
                         <p><strong>Territorial:</strong> {datos['territorial']}</p>
                         <p><strong>Solicitante:</strong> {datos['nombre']}</p>
                         <p><strong>Email:</strong> {datos['email']}</p>
-                        <p><strong>Fecha:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+                        <p><strong>Fecha:</strong> {now_colombia().strftime('%d/%m/%Y %H:%M')}</p>
                     </div>
                     
                     <div class="highlight">
@@ -410,7 +411,7 @@ class EmailManager:
                         <p><strong>Área:</strong> {datos['area']}</p>
                         <p><strong>Proceso:</strong> {datos['proceso']}</p>
                         <p><strong>Tipo de Solicitud:</strong> {datos['tipo']}</p>
-                        {f"<p><strong>Fecha Límite Deseada:</strong> {datos['fecha_limite'].strftime('%d/%m/%Y')}</p>" if datos.get('fecha_limite') else ""}
+                        {f"<p><strong>Fecha Límite Deseada:</strong> {format_colombia_time(datos['fecha_limite'])}</p>" if datos.get('fecha_limite') else ""}
                     </div>
                     
                     <div class="info-box">
@@ -467,7 +468,7 @@ class EmailManager:
                         <h3>📋 Resumen de su Solicitud</h3>
                         <p><strong>Territorial:</strong> {datos['territorial']}</p>
                         <p><strong>Solicitante:</strong> {datos['nombre']}</p>
-                        <p><strong>Fecha de Solicitud:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+                        <p><strong>Fecha de Solicitud:</strong> {now_colombia().strftime('%d/%m/%Y %H:%M')}</p>
                         <p><strong>Área:</strong> {datos['area']}</p>
                         <p><strong>Proceso:</strong> {datos['proceso']}</p>
                         <p><strong>Tipo:</strong> {datos['tipo']}</p>
@@ -548,7 +549,7 @@ class EmailManager:
                         <div class="status-box">
                             <h3>🎯 Nuevo Estado</h3>
                             <h2>{estado_emoji.get(nuevo_estado, '🔹')} {nuevo_estado}</h2>
-                            <p><strong>Actualizado:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+                            <p><strong>Actualizado:</strong> {now_colombia().strftime('%d/%m/%Y %H:%M')}</p>
                         </div>
                         
                         {f'''
@@ -627,7 +628,7 @@ class EmailManager:
                     <div class="status-box">
                         <h3>🎯 Nuevo Estado</h3>
                         <h2>{estado_emoji.get(nuevo_estado, '🔹')} {nuevo_estado}</h2>
-                        <p><strong>Actualizado:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+                        <p><strong>Actualizado:</strong> {now_colombia().strftime('%d/%m/%Y %H:%M')}</p>
                     </div>
                     
                     {f'''
@@ -739,7 +740,7 @@ class EmailManager:
                         <h3>📋 Solicitud</h3>
                         <p><strong>ID:</strong> {datos['id_solicitud']}</p>
                         <p><strong>Proceso:</strong> {datos.get('proceso', 'N/A')}</p>
-                        <p><strong>Actualizado:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+                        <p><strong>Actualizado:</strong> {now_colombia().strftime('%d/%m/%Y %H:%M')}</p>
                     </div>
                     
                     <h3>🔄 Cambios Realizados:</h3>
@@ -850,7 +851,7 @@ class EmailManager:
                         <p><strong>Email:</strong> {datos['email_solicitante']}</p>
                         <p><strong>Proceso:</strong> {datos.get('proceso', 'N/A')}</p>
                         <p><strong>Tipo:</strong> {datos['tipo_solicitud']}</p>
-                        <p><strong>Fecha:</strong> {datos['fecha_solicitud'].strftime('%d/%m/%Y') if 'fecha_solicitud' in datos else 'N/A'}</p>
+                        <p><strong>Fecha:</strong> {format_colombia_time(datos['fecha_solicitud']) if 'fecha_solicitud' in datos else 'N/A'}</p>
                     </div>
                     
                     {changes_html}

@@ -4,6 +4,7 @@ from datetime import datetime
 from sharepoint_list_manager import SharePointListManager
 from dashboard import mostrar_tab_dashboard
 from admin_solicitudes import mostrar_tab_admin
+from timezone_utils import now_colombia
 
 # Page configuration
 st.set_page_config(
@@ -114,7 +115,7 @@ def main():
 
     # Show data freshness - simplified without get_stats()
     if not cached_df.empty:
-        last_update = datetime.now().strftime('%H:%M:%S')
+        last_update = now_colombia().strftime('%H:%M:%S')
         st.caption(f"📊 Datos en caché | Total solicitudes: {len(cached_df)} | Actualizado: {last_update} | Cache TTL: 60s")
     
     
