@@ -99,7 +99,7 @@ def mostrar_tab_admin(data_manager):
     with col1:
         st.header(f"⚙️ Admin Panel - {proceso_admin}")
     with col2:
-        if st.button("🔄 Refresh Data", key="refresh_admin"):
+        if st.button("🔄 Actualizar Datos", key="refresh_admin"):
             st.cache_resource.clear()
             st.rerun()
     with col3:
@@ -798,52 +798,3 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
     except Exception as e:
         st.error(f"❌ Error al procesar actualización: {str(e)}")
         return False
-      
-def show_update_summary(solicitud, nuevo_estado, nueva_prioridad, responsable, 
-                       nuevo_comentario, email_sent, notificar_responsable, email_responsable, files_uploaded=None):
-    """Show update summary in a clean way"""
-    
-    changes_summary = []
-    if nuevo_estado != solicitud['estado']:
-        changes_summary.append(f"Estado: {solicitud['estado']} → {nuevo_estado}")
-    
-    if nueva_prioridad != solicitud.get('prioridad', 'Media'):
-        changes_summary.append(f"Prioridad: {solicitud.get('prioridad', 'Media')} → {nueva_prioridad}")
-    
-    if responsable and responsable != solicitud.get('responsable_asignado', ''):
-        changes_summary.append(f"Responsable asignado: {responsable}")
-    
-    if nuevo_comentario and nuevo_comentario.strip():
-        changes_summary.append("Nuevo comentario agregado")
-    
-    if email_sent:
-        changes_summary.append("Notificación enviada al solicitante")
-    
-    if files_uploaded:
-        changes_summary.append(f"{len(files_uploaded)} archivo(s) subido(s)")
-    
-    # Show summary in info box
-    with st.container():
-        col1, col2 = st.columns([1, 1])
-        
-        with col1:
-            st.info(f"""
-            **✅ Solicitud {solicitud['id_solicitud']} actualizada**
-            
-            **Solicitante:** {solicitud['nombre_solicitante']}
-            **Nuevo Estado:** {nuevo_estado}
-            """)
-        
-        with col2:
-            if changes_summary:
-                changes_text = "\n".join([f"• {change}" for change in changes_summary])
-                st.success(f"""
-                **🔄 Cambios realizados:**
-                
-                {changes_text}
-                """)
-            else:
-                st.info("• Solicitud actualizada sin cambios")
-        
-        if notificar_responsable and email_responsable:
-            st.info(f"📧 Notificación programada para {email_responsable}")

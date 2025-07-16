@@ -717,22 +717,6 @@ class SharePointListManager:
             return pd.DataFrame()
         return self.df[self.df['id_solicitud'] == id_solicitud]
     
-    def _validate_request_exists(self, id_solicitud: str) -> bool:
-        """Check if request exists"""
-        try:
-            if self.df is None or self.df.empty:
-                return False
-            return id_solicitud in self.df['id_solicitud'].values
-        except Exception as e:
-            print(f"Error validating request existence: {e}")
-            return False
-    
-    def save_data(self) -> bool:
-        """Save data - for SharePoint this is handled automatically by API calls"""
-        # SharePoint automatically saves data via API calls
-        # This method exists for compatibility with other data managers
-        return True
-    
     def get_requests_summary(self) -> Dict[str, Any]:
         """Get requests summary for dashboard"""
         if self.df is None or self.df.empty:
