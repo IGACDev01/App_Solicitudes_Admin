@@ -686,10 +686,47 @@ def procesar_actualizacion_sharepoint_simplified(data_manager, solicitud, nuevo_
                     'proceso': solicitud.get('proceso', 'N/A')
                 }
                 
-                # Send notification with only changed fields
-                email_sent = email_manager.send_status_update_notification_changes_only(
-                    solicitud_data, changes, responsable, email_responsable
-                )
+                # Check if files were uploaded
+                if files_uploaded:
+                    # If multiple files, create a single attachment with file list
+                    if len(files_uploaded) == 1:
+                        # Single file - try to attach it
+                        try:
+                            # Get the first uploaded file data
+                            for uploaded_file in new_files:
+                                if uploaded_file.name == files_uploaded[0]:
+                                    file_data = uploaded_file.getvalue()
+                                    
+                                    # Send with attachment
+                                    email_sent = email_manager.send_status_update_with_attachment(
+                                        solicitud_data, 
+                                        nuevo_estado,
+                                        nuevo_comentario or f"Estado actualizado a {nuevo_estado}",
+                                        file_data,
+                                        uploaded_file.name
+                                    )
+                                    break
+                            else:
+                                # Fallback if file not found
+                                email_sent = email_manager.send_status_update_notification_changes_only(
+                                    solicitud_data, changes, responsable, email_responsable
+                                )
+                        except Exception as e:
+                            print(f"Error attaching file to email: {e}")
+                            # Fallback to notification without attachment
+                            email_sent = email_manager.send_status_update_notification_changes_only(
+                                solicitud_data, changes, responsable, email_responsable
+                            )
+                    else:
+                        # Multiple files - send notification with files list in changes
+                        email_sent = email_manager.send_status_update_notification_changes_only(
+                            solicitud_data, changes, responsable, email_responsable
+                        )
+                else:
+                    # No files uploaded - use regular notification
+                    email_sent = email_manager.send_status_update_notification_changes_only(
+                        solicitud_data, changes, responsable, email_responsable
+                    )
                 
             except Exception as e:
                 print(f"Email notification error: {e}")

@@ -435,7 +435,7 @@ class EmailManager:
         """
     
     def get_confirmation_template(self, datos: Dict[str, Any], id_solicitud: str) -> str:
-        """HTML template for confirmation to requester - UPDATED with app link"""
+        """HTML template for confirmation to requester - UPDATED with file access info"""
         return f"""
         <!DOCTYPE html>
         <html>
@@ -487,19 +487,30 @@ class EmailManager:
                             <li>Los responsables revisarán su solicitud y comenzarán a procesarla</li>
                             <li>Recibirá notificaciones por email cuando haya actualizaciones</li>
                             <li>Puede consultar el estado usando el ID: <strong>{id_solicitud}</strong></li>
+                            <li><strong>📎 Archivos adjuntos:</strong> Estarán disponibles en la App de Seguimiento</li>
                         </ul>
                     </div>
                     
-                    <div class="info-box" style="text-align: center;">
+                    <div class="info-box" style="text-align: center; background: #f0f8ff;">
                         <h3>🔍 Seguimiento de su Solicitud</h3>
-                        <p>Para más información y seguimiento en tiempo real, visite:</p>
+                        <p>Para consultar el estado, ver comentarios y <strong>descargar archivos adjuntos:</strong></p>
                         <a href="{APP_URL}" class="app-link">📱 App de Seguimiento de Solicitudes</a>
-                        <p><small>Use su ID de solicitud: <strong>{id_solicitud}</strong> para hacer seguimiento</small></p>
+                        <p><strong>Su ID de seguimiento:</strong> <span class="id-code">{id_solicitud}</span></p>
+                        <div style="background: #e3f2fd; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                            <p><strong>💡 Cómo hacer seguimiento:</strong></p>
+                            <ol style="text-align: left; display: inline-block;">
+                                <li>Visite la App de Seguimiento</li>
+                                <li>Vaya a la pestaña <strong>"🔍 Seguimiento"</strong></li>
+                                <li>Ingrese su ID: <strong>{id_solicitud}</strong></li>
+                                <li>Vea el estado, comentarios y descargue archivos</li>
+                            </ol>
+                        </div>
                     </div>
                 </div>
                 <div class="footer">
                     <p>Sistema de Gestión de Solicitudes - IGAC</p>
                     <p>Guarde este email para futuras referencias. ID: {id_solicitud}</p>
+                    <p>📧 Este es un mensaje automático. No responda a este correo.</p>
                 </div>
             </div>
         </body>
@@ -657,7 +668,7 @@ class EmailManager:
     
     def get_changes_only_template(self, datos: Dict[str, Any], changes: Dict[str, Any], 
                                 responsable: str = "", email_responsable: str = "") -> str:
-        """HTML template showing only changed fields"""
+        """HTML template showing only changed fields - UPDATED with app file access info"""
         
         # Build changes section
         changes_html = ""
@@ -707,10 +718,21 @@ class EmailManager:
         
         if 'archivos' in changes:
             files_list = ', '.join(changes['archivos']['new'])
+            file_count = len(changes['archivos']['new'])
             changes_html += f"""
             <div class="change-box">
                 <h3>📎 Archivos Adjuntos</h3>
-                <p><strong>Nuevos archivos:</strong> {files_list}</p>
+                <p><strong>Nuevos archivos subidos ({file_count}):</strong> {files_list}</p>
+                <div style="background: #e3f2fd; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                    <p><strong>📱 Para acceder a los archivos:</strong></p>
+                    <ol>
+                        <li>Visite la <strong>App de Seguimiento de Solicitudes</strong></li>
+                        <li>Vaya a la pestaña <strong>"🔍 Seguimiento"</strong></li>
+                        <li>Ingrese su ID de solicitud: <strong>{datos['id_solicitud']}</strong></li>
+                        <li>Los archivos aparecerán en la sección <strong>"📎 Archivos Adjuntos"</strong></li>
+                    </ol>
+                    <p><em>💡 Los archivos están disponibles para descarga las 24 horas del día.</em></p>
+                </div>
             </div>
             """
         
@@ -727,7 +749,8 @@ class EmailManager:
                 .info-box {{ background: white; padding: 15px; margin: 10px 0; border-left: 4px solid #17becf; }}
                 .change-box {{ background: #e8f5e8; padding: 15px; margin: 15px 0; border-radius: 5px; border-left: 4px solid #28a745; }}
                 .footer {{ text-align: center; padding: 20px; color: #666; font-size: 12px; }}
-                .app-link {{ background: #007bff; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 10px 0; }}
+                .app-link {{ background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0; font-weight: bold; }}
+                .app-link:hover {{ background: #0056b3; }}
             </style>
         </head>
         <body>
@@ -746,20 +769,23 @@ class EmailManager:
                     <h3>🔄 Cambios Realizados:</h3>
                     {changes_html}
                     
-                    <div class="info-box" style="text-align: center;">
-                        <h3>🔍 Ver Detalles Completos</h3>
-                        <a href="{APP_URL}" class="app-link">📱 App de Seguimiento</a>
-                        <p><small>Use su ID: <strong>{datos['id_solicitud']}</strong></small></p>
+                    <div class="info-box" style="text-align: center; background: #f0f8ff;">
+                        <h3>🔍 Ver Detalles Completos y Archivos</h3>
+                        <p>Para acceder a toda la información de su solicitud y descargar archivos:</p>
+                        <a href="{APP_URL}" class="app-link">📱 App de Seguimiento de Solicitudes</a>
+                        <p><strong>Su ID de seguimiento:</strong> <span style="font-family: monospace; background: #e8e8e8; padding: 2px 6px; border-radius: 3px;">{datos['id_solicitud']}</span></p>
+                        <p><small>💡 En la pestaña "🔍 Seguimiento" podrá ver el historial completo y descargar todos los archivos adjuntos.</small></p>
                     </div>
                 </div>
                 <div class="footer">
                     <p>Sistema de Gestión de Solicitudes - IGAC</p>
+                    <p>📧 Este es un mensaje automático. No responda a este correo.</p>
                 </div>
             </div>
         </body>
         </html>
         """
-    
+
     def send_responsible_notification(self, datos_solicitud: Dict[str, Any], 
                                     changes: Dict[str, Any], responsable: str = "", 
                                     email_responsable: str = "") -> bool:
