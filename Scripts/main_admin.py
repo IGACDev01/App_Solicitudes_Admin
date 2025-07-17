@@ -107,7 +107,7 @@ def main():
         st.empty() 
     
     with col2:
-        st.image("Logo IGAC.png", width=100)
+        st.image("Theme/Logo IGAC.png", width=100)
     
     # Obtener gestor de datos (en caché)
     gestor_datos = obtener_gestor_datos()
