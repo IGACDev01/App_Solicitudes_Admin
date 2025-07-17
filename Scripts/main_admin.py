@@ -16,18 +16,18 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main-header {
-        background: #0765a7;
-        padding: 1rem;
+        background: #006AB3;
+        padding: 0.1rem;
         border-radius: 10px;
         margin-bottom: 2rem;
         color: white;
         text-align: center;
     }
     .sharepoint-status {
-        background: #0765a7;
+        background: #006AB3;
         padding: 10px;
         border-radius: 5px;
-        border-left: 4px solid #0765a7;
+        border-left: 4px solid #006AB3;
         margin-bottom: 20px;
     }
     .footer {
@@ -35,7 +35,7 @@ st.markdown("""
         left: 0;
         bottom: 0;
         width: 100%;
-        background-color: #0765a7;
+        background-color: #38a962;
         color: white;
         text-align: center;
         padding: 8px 0;
@@ -44,7 +44,7 @@ st.markdown("""
         box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
     }
     .footer a {
-        color: #0765a7;
+        color: #38a962;
         text-decoration: none;
     }
     .footer a:hover {
@@ -93,11 +93,21 @@ def main():
     inicializar_estado_sesion()
     
     # Título principal
-    st.markdown("""
-    <div class="main-header">
-        <h1>📊 Sistema de Gestión de Solicitudes</h1>
-    </div>
-    """, unsafe_allow_html=True)
+    col1, spacer, col2 = st.columns([10, 0.5, 1])
+    
+    with col1:
+        st.markdown("""
+        <div class="main-header">
+            <div class="header-text">
+                <h1>Administrador de Solicitudes</h1>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with spacer:
+        st.empty() 
+    
+    with col2:
+        st.image("Logo IGAC.png", width=100)
     
     # Obtener gestor de datos (en caché)
     gestor_datos = obtener_gestor_datos()
