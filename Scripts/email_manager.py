@@ -1,10 +1,8 @@
 import requests
-import json
-from datetime import datetime
 from typing import Dict, Any, Optional
 import os
 from dotenv import load_dotenv
-from timezone_utils import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
+from timezone_utils_admin import obtener_fecha_actual_colombia, formatear_fecha_colombia
 
 URL_APLICACION = "https://appsolicitudes-h72izekvzacukoykxwnfqb.streamlit.app/"
 
@@ -478,10 +476,11 @@ class GestorNotificacionesEmail:
                                                                  comentarios: str, nombre_archivo_adjunto: str = None) -> str:
         """Plantilla HTML para notificación de actualización de estado con archivo adjunto y enlace a la app"""
         emojis_estado = {
-            "Asignada": "🟡",
-            "En Proceso": "🔵", 
-            "Completado": "✅",
-            "Cancelado": "❌"
+        "Asignada": "🟡",
+        "En Proceso": "🔵", 
+        "Incompleta": "🟠",
+        "Completado": "✅",
+        "Cancelado": "❌"
         }
         
         seccion_archivo_adjunto = ""
@@ -564,8 +563,11 @@ class GestorNotificacionesEmail:
         
         if 'estado' in cambios:
             emojis_estado = {
-                "Asignada": "🟡", "En Proceso": "🔵", 
-                "Completado": "✅", "Cancelado": "❌"
+                "Asignada": "🟡", 
+                "En Proceso": "🔵", 
+                "Incompleta": "🟠", 
+                "Completado": "✅", 
+                "Cancelado": "❌"
             }
             emoji_anterior = emojis_estado.get(cambios['estado']['old'], '🔹')
             emoji_nuevo = emojis_estado.get(cambios['estado']['new'], '🔹')
@@ -685,8 +687,11 @@ class GestorNotificacionesEmail:
         
         if 'estado' in cambios:
             emojis_estado = {
-                "Asignada": "🟡", "En Proceso": "🔵", 
-                "Completado": "✅", "Cancelado": "❌"
+                "Asignada": "🟡", 
+                "En Proceso": "🔵", 
+                "Incompleta": "🟠",
+                "Completado": "✅", 
+                "Cancelado": "❌"
             }
             emoji_nuevo = emojis_estado.get(cambios['estado']['new'], '🔹')
             html_cambios += f"""

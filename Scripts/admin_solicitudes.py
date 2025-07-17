@@ -2,9 +2,8 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 from email_manager import GestorNotificacionesEmail
-import plotly.express as px
 import plotly.graph_objects as go
-from timezone_utils import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
+from timezone_utils_admin import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
 
 # Credenciales por proceso
 CREDENCIALES_ADMINISTRADORES = {
@@ -211,10 +210,12 @@ def normalizar_datetime(dt):
 
 def mostrar_mini_dashboard(df, proceso):
     """Mini dashboard del proceso"""
+    
+    from timezone_utils_admin import obtener_fecha_actual_colombia
     st.subheader(f"📊 Dashboard - {proceso}")
     
     # Métricas principales
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         total = len(df)
@@ -228,7 +229,11 @@ def mostrar_mini_dashboard(df, proceso):
         en_proceso = len(df[df['estado'] == 'En Proceso'])
         st.metric("🔵 En Proceso", en_proceso)
     
-    with col4:
+    with col4:  
+        incompletas = len(df[df['estado'] == 'Incompleta'])
+        st.metric("🟠 Incompletas", incompletas)
+    
+    with col5:
         completadas = len(df[df['estado'] == 'Completado'])
         st.metric("✅ Completadas", completadas)
     
@@ -249,6 +254,27 @@ def mostrar_mini_dashboard(df, proceso):
             
             if not antiguas.empty:
                 st.warning(f"⚠️ {len(antiguas)} solicitudes Asignadas por más de 7 días")
+
+    if incompletas > 0:
+        # Buscar incompletas por mucho tiempo
+        df_incompletas = df[df['estado'] == 'Incompleta']
+        if not df_incompletas.empty and 'fecha_pausa' in df_incompletas.columns:
+            from timezone_utils_admin import convertir_a_colombia, obtener_fecha_actual_colombia
+            fecha_actual = obtener_fecha_actual_colombia()
+            
+            # Contar incompletas por más de 7 días
+            incompletas_antiguas = 0
+            for _, row in df_incompletas.iterrows():
+                fecha_pausa = row.get('fecha_pausa')
+                if fecha_pausa and pd.notna(fecha_pausa):
+                    fecha_pausa_colombia = convertir_a_colombia(fecha_pausa)
+                    if fecha_pausa_colombia:
+                        dias_pausada = (fecha_actual - fecha_pausa_colombia).days
+                        if dias_pausada > 7:
+                            incompletas_antiguas += 1
+            
+            if incompletas_antiguas > 0:
+                st.warning(f"⏸️ {incompletas_antiguas} solicitudes incompletas por más de 7 días")
     
     # Gráfico de estados
     if total > 0:
@@ -259,7 +285,7 @@ def mostrar_mini_dashboard(df, proceso):
                 labels=datos_estados.index,
                 values=datos_estados.values,
                 hole=0.4,
-                marker=dict(colors=['#FFA726', '#42A5F5', '#66BB6A', '#EF5350'])
+                marker=dict(colors=['#FFA726', '#42A5F5', '#FF9800', '#66BB6A', '#EF5350'])
             )
         ])
         
@@ -352,17 +378,19 @@ def mostrar_lista_solicitudes_administrador_mejorada(gestor_datos, df, proceso):
         
 def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
     """Versión simplificada con UI más limpia"""
-    
+    from timezone_utils_admin import convertir_a_colombia, obtener_fecha_actual_colombia
     # Determinar color y emoji
     prioridad = solicitud.get('prioridad', 'Media')
     estado = solicitud['estado']
     
-    if prioridad == 'Alta' and estado == 'Asignada':
-        emoji = "🔴"
+    if estado == 'Asignada':
+        emoji = "🟡"
     elif estado == 'Completado':
         emoji = "✅"
     elif estado == 'En Proceso':
         emoji = "🔵"
+    elif estado == 'Incompleta':
+        emoji = "🟠"
     else:
         emoji = "📄"
     
@@ -391,6 +419,15 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
         # Mostrar mensaje de éxito de actualización brevemente
         if actualizado_recientemente and mostrar_exito:
             st.success(f"✅ Solicitud Actualizada")
+
+        # Alerta para solicitudes incompletas:
+        if solicitud['estado'] == 'Incompleta':
+            fecha_pausa = solicitud.get('fecha_pausa')
+            if fecha_pausa and pd.notna(fecha_pausa):
+                fecha_pausa_colombia = convertir_a_colombia(fecha_pausa)
+                if fecha_pausa_colombia:
+                    dias_pausada = (obtener_fecha_actual_colombia() - fecha_pausa_colombia).days
+                    st.warning(f"⏸️ Solicitud PAUSADA desde hace {dias_pausada} días")
         
         # Información básica
         col1, col2 = st.columns(2)
@@ -439,6 +476,20 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                 st.info(f"**Comentario previo:** {comentario_limpio}")
         else:
             st.markdown("**💬 Sin comentarios previos**")
+
+        # Historial de pausas
+        historial_pausas = solicitud.get('historial_pausas', '')
+        if historial_pausas and historial_pausas.strip():
+            st.markdown("---")
+            st.markdown("**⏸️ Historial de Pausas**")
+            with st.expander("Ver historial de pausas", expanded=False):
+                st.text_area(
+                    "Pausas:",
+                    value=historial_pausas,
+                    height=100,
+                    disabled=True,
+                    key=f"pausas_{solicitud['id_solicitud']}"
+                )
         
         # Sección de archivos
         st.markdown("---")
@@ -449,17 +500,17 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
         
         # Formulario de gestión simplificado
         with st.form(f"gestionar_{solicitud['id_solicitud']}"):
-            
+        
             col1, col2 = st.columns(2)
             
             with col1:
                 nuevo_estado = st.selectbox(
                     "Estado:",
-                    options=["Asignada", "En Proceso", "Completado", "Cancelado"],
-                    index=["Asignada", "En Proceso", "Completado", "Cancelado"].index(solicitud['estado']),
+                    options=["Asignada", "En Proceso", "Incompleta", "Completado", "Cancelado"],
+                    index=["Asignada", "En Proceso", "Incompleta", "Completado", "Cancelado"].index(solicitud['estado']),
                     key=f"estado_{solicitud['id_solicitud']}"
                 )
-                
+                    
                 prioridad_actual = solicitud.get('prioridad', 'Media')
                 nueva_prioridad = st.selectbox(
                     "Prioridad:",
@@ -593,6 +644,16 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
     """Proceso de actualización simplificado y confiable"""
     
     try:
+
+        # Validación de transiciones de estado:
+        estado_actual = solicitud['estado']
+        
+        # Validar transición a Completado desde Incompleta
+        if estado_actual == 'Incompleta' and nuevo_estado == 'Completado':
+            st.error("❌ No se puede completar una solicitud incompleta. Primero reanúdela cambiando a 'En Proceso'.")
+            return False
+
+
         # Rastrear qué cambió realmente
         cambios = {}
         
@@ -621,10 +682,16 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
             )
         else:
             comentarios_finales = comentarios_actuales
-            # Agregar comentario automático para cambios de estado sin comentario manual
+            # Comentarios automáticos para incluir pausas:
             if 'estado' in cambios:
                 autor = st.session_state.get('usuario_admin', 'Admin')
-                comentario_automatico = f"Estado cambiado de '{cambios['estado']['old']}' a '{cambios['estado']['new']}'"
+                if nuevo_estado == 'Incompleta':
+                    comentario_automatico = f"Solicitud PAUSADA - Estado cambiado a 'Incompleta'"
+                elif estado_actual == 'Incompleta':
+                    comentario_automatico = f"Solicitud REANUDADA - Estado cambiado de 'Incompleta' a '{nuevo_estado}'"
+                else:
+                    comentario_automatico = f"Estado cambiado de '{cambios['estado']['old']}' a '{cambios['estado']['new']}'"
+                
                 comentarios_finales = agregar_comentario_administrador(
                     comentarios_actuales, 
                     comentario_automatico, 
@@ -686,51 +753,14 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
                     'proceso': solicitud.get('proceso', 'N/A')
                 }
                 
-                # Verificar si se subieron archivos
-                if archivos_subidos:
-                    # Si hay múltiples archivos, crear un único adjunto con lista de archivos
-                    if len(archivos_subidos) == 1:
-                        # Archivo único - intentar adjuntarlo
-                        try:
-                            # Obtener los datos del primer archivo subido
-                            for archivo_subido in archivos_nuevos:
-                                if archivo_subido.name == archivos_subidos[0]:
-                                    datos_archivo = archivo_subido.getvalue()
-                                    
-                                    # Enviar con adjunto
-                                    email_enviado = gestor_email.enviar_actualizacion_con_archivo_adjunto(
-                                        datos_solicitud, 
-                                        nuevo_estado,
-                                        nuevo_comentario or f"Estado actualizado a {nuevo_estado}",
-                                        datos_archivo,
-                                        archivo_subido.name
-                                    )
-                                    break
-                            else:
-                                # Fallback si no se encuentra el archivo
-                                email_enviado = gestor_email.enviar_notificacion_actualizacion_solo_cambios(
-                                    datos_solicitud, cambios, responsable, email_responsable
-                                )
-                        except Exception as e:
-                            print(f"Error adjuntando archivo al email: {e}")
-                            # Fallback a notificación sin adjunto
-                            email_enviado = gestor_email.enviar_notificacion_actualizacion_solo_cambios(
-                                datos_solicitud, cambios, responsable, email_responsable
-                            )
-                    else:
-                        # Múltiples archivos - enviar notificación con lista de archivos en cambios
-                        email_enviado = gestor_email.enviar_notificacion_actualizacion_solo_cambios(
-                            datos_solicitud, cambios, responsable, email_responsable
-                        )
-                else:
-                    # No se subieron archivos - usar notificación regular
-                    email_enviado = gestor_email.enviar_notificacion_actualizacion_solo_cambios(
-                        datos_solicitud, cambios, responsable, email_responsable
-                    )
-                
+                # Enviar notificación sin adjuntos
+                email_enviado = gestor_email.enviar_notificacion_actualizacion_solo_cambios(
+                    datos_solicitud, cambios, responsable, email_responsable
+                )
+                        
             except Exception as e:
                 print(f"Error en notificación por email: {e}")
-        
+                
         # Paso 4b: Notificación opcional al responsable
         email_responsable_enviado = False
         if notificar_responsable and email_responsable and email_responsable.strip() and cambios:

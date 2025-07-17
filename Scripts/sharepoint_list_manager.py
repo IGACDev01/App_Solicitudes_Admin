@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import requests
 from typing import Dict, Any, Optional, List
 from urllib.parse import quote
-from timezone_utils import obtener_fecha_actual_colombia, convertir_a_colombia, convertir_a_utc_para_almacenamiento
+from timezone_utils_admin import obtener_fecha_actual_colombia, convertir_a_colombia, convertir_a_utc_para_almacenamiento
 
 class GestorListasSharePoint:
     def __init__(self, nombre_lista: str = "Data App Solicitudes"):
@@ -335,7 +335,10 @@ class GestorListasSharePoint:
                         'comentarios_admin': campos.get('ComentariosAdmin', ''),
                         'tiempo_respuesta_dias': campos.get('TiempoRespuestaDias', 0),
                         'tiempo_resolucion_dias': campos.get('TiempoResolucionDias', 0),
-                        'sharepoint_id': item.get('id', '')  # Almacenar ID interno de SharePoint
+                        'sharepoint_id': item.get('id', ''),
+                        'tiempo_pausado_dias': campos.get('TiempoPausadoDias', 0),
+                        'fecha_pausa': self._normalizar_datetime(self._parsear_fecha(campos.get('FechaPausa'))),
+                        'historial_pausas': campos.get('HistorialPausas', '')
                     }
                     filas.append(fila)
                 
@@ -423,9 +426,21 @@ class GestorListasSharePoint:
             return None
     
     def actualizar_estado_solicitud(self, id_solicitud: str, nuevo_estado: str, 
-                                  responsable: str = "", comentarios: str = "") -> bool:
+                                responsable: str = "", comentarios: str = "") -> bool:
         """Actualizar estado de solicitud en Lista SharePoint"""
         try:
+            # Obtener estado anterior
+            solicitud_actual = self.obtener_solicitud_por_id(id_solicitud)
+            if solicitud_actual.empty:
+                return False
+            
+            estado_anterior = solicitud_actual.iloc[0]['estado']
+            
+            # Gestionar pausas/reanudaciones
+            if not self._gestionar_pausa_reanudacion(id_solicitud, estado_anterior, nuevo_estado, "Estado cambiado"):
+                print(f"Error gestionando pausa para solicitud {id_solicitud}")
+                # Continuar con actualización normal aunque falle la gestión de pausa
+            
             # Encontrar el elemento SharePoint
             id_sharepoint = self._obtener_id_elemento_sharepoint(id_solicitud)
             if not id_sharepoint:
@@ -454,34 +469,36 @@ class GestorListasSharePoint:
             if nuevo_estado == 'Completado':
                 datos_actualizacion['FechaCompletado'] = tiempo_actual_utc
                 
-                # Calcular tiempo de resolución
-                elemento_original = self.obtener_solicitud_por_id(id_solicitud)
-                if not elemento_original.empty:
-                    fecha_solicitud = elemento_original.iloc[0]['fecha_solicitud']
+                # Cálculo de tiempo de resolución para considerar pausas
+                if not solicitud_actual.empty:
+                    fecha_solicitud = solicitud_actual.iloc[0]['fecha_solicitud']
+                    tiempo_pausado = solicitud_actual.iloc[0].get('tiempo_pausado_dias', 0)
+                    
                     if pd.notna(fecha_solicitud):
-                        # Normalizar ambas fechas a timezone-naive
                         fecha_solicitud_colombia = convertir_a_colombia(fecha_solicitud)
                         fecha_actual_norm = obtener_fecha_actual_colombia()
                         
                         if fecha_solicitud_colombia:
-                            tiempo_resolucion = (fecha_actual_norm - fecha_solicitud_colombia).total_seconds() / (24 * 3600)
-                            datos_actualizacion['TiempoResolucionDias'] = round(tiempo_resolucion, 2)
+                            tiempo_total = (fecha_actual_norm - fecha_solicitud_colombia).total_seconds() / (24 * 3600)
+                            tiempo_efectivo = tiempo_total - tiempo_pausado
+                            datos_actualizacion['TiempoResolucionDias'] = round(max(tiempo_efectivo, 0), 2)
             
-            # Calcular tiempo de respuesta si esta es la primera actualización
-            if nuevo_estado != 'Asignada':
-                elemento_original = self.obtener_solicitud_por_id(id_solicitud)
-                if not elemento_original.empty:
-                    tiempo_respuesta_actual = elemento_original.iloc[0].get('tiempo_respuesta_dias', 0)
+            # MODIFICAR cálculo de tiempo de respuesta para considerar pausas
+            if nuevo_estado != 'Asignada' and estado_anterior == 'Asignada':
+                if not solicitud_actual.empty:
+                    tiempo_respuesta_actual = solicitud_actual.iloc[0].get('tiempo_respuesta_dias', 0)
                     if tiempo_respuesta_actual == 0:
-                        fecha_solicitud = elemento_original.iloc[0]['fecha_solicitud']
+                        fecha_solicitud = solicitud_actual.iloc[0]['fecha_solicitud']
+                        tiempo_pausado = solicitud_actual.iloc[0].get('tiempo_pausado_dias', 0)
+                        
                         if pd.notna(fecha_solicitud):
-                            # Normalizar ambas fechas a timezone-naive
                             fecha_solicitud_colombia = convertir_a_colombia(fecha_solicitud)
                             fecha_actual_norm = obtener_fecha_actual_colombia()
                             
                             if fecha_solicitud_colombia:
-                                tiempo_respuesta = (fecha_actual_norm - fecha_solicitud_colombia).total_seconds() / (24 * 3600)
-                                datos_actualizacion['TiempoRespuestaDias'] = round(tiempo_respuesta, 2)
+                                tiempo_total = (fecha_actual_norm - fecha_solicitud_colombia).total_seconds() / (24 * 3600)
+                                tiempo_efectivo = tiempo_total - tiempo_pausado
+                                datos_actualizacion['TiempoRespuestaDias'] = round(max(tiempo_efectivo, 0), 2)
             
             # Actualizar elemento de lista SharePoint
             url_actualizar = f"{self.configuracion_graph['graph_url']}/sites/{self.id_sitio_sharepoint}/lists/{self.id_lista}/items/{id_sharepoint}/fields"
@@ -702,7 +719,8 @@ class GestorListasSharePoint:
             'fecha_solicitud', 'tipo_solicitud', 'area', 'proceso', 'prioridad',
             'descripcion', 'estado', 'responsable_asignado', 'fecha_actualizacion',
             'fecha_completado', 'comentarios_admin', 'tiempo_respuesta_dias',
-            'tiempo_resolucion_dias', 'sharepoint_id'
+            'tiempo_resolucion_dias', 'sharepoint_id',
+            'tiempo_pausado_dias', 'fecha_pausa', 'historial_pausas'
         ])
     
     def obtener_todas_solicitudes(self) -> pd.DataFrame:
@@ -820,3 +838,103 @@ class GestorListasSharePoint:
             'url_sitio': self.configuracion_graph.get('sharepoint_site_url'),
             'drive_destino_conectado': bool(self.id_drive_destino)
         }
+        
+    def _gestionar_pausa_reanudacion(self, id_solicitud: str, estado_anterior: str, nuevo_estado: str, motivo: str = ""):
+        """Gestionar lógica de pausa y reanudación"""
+        try:
+            # Pausar solicitud
+            if nuevo_estado == "Incompleta" and estado_anterior != "Incompleta":
+                return self._pausar_solicitud(id_solicitud, motivo)
+            
+            # Reanudar solicitud
+            elif estado_anterior == "Incompleta" and nuevo_estado != "Incompleta":
+                return self._reanudar_solicitud(id_solicitud, motivo)
+            
+            return True
+        except Exception as e:
+            print(f"Error en gestión de pausa: {e}")
+            return False
+
+    def _pausar_solicitud(self, id_solicitud: str, motivo: str) -> bool:
+        """Pausar solicitud - registrar inicio de pausa"""
+        try:
+            id_sharepoint = self._obtener_id_elemento_sharepoint(id_solicitud)
+            if not id_sharepoint:
+                return False
+            
+            headers = self._obtener_headers()
+            if not headers.get('Authorization'):
+                return False
+            
+            tiempo_actual_utc = convertir_a_utc_para_almacenamiento(obtener_fecha_actual_colombia()).isoformat() + 'Z'
+            
+            # Obtener historial actual
+            solicitud_actual = self.obtener_solicitud_por_id(id_solicitud)
+            historial_actual = solicitud_actual.iloc[0].get('historial_pausas', '') if not solicitud_actual.empty else ''
+            
+            # Agregar entrada al historial
+            nueva_entrada = f"[{obtener_fecha_actual_colombia().strftime('%d/%m/%Y %H:%M')}] PAUSADA - {motivo}"
+            historial_actualizado = f"{historial_actual}\n{nueva_entrada}" if historial_actual else nueva_entrada
+            
+            datos_pausa = {
+                'FechaPausa': tiempo_actual_utc,
+                'HistorialPausas': historial_actualizado
+            }
+            
+            url_actualizar = f"{self.configuracion_graph['graph_url']}/sites/{self.id_sitio_sharepoint}/lists/{self.id_lista}/items/{id_sharepoint}/fields"
+            response = requests.patch(url_actualizar, headers=headers, json=datos_pausa)
+            
+            return response.status_code in [200, 204]
+            
+        except Exception as e:
+            print(f"Error pausando solicitud: {e}")
+            return False
+
+    def _reanudar_solicitud(self, id_solicitud: str, motivo: str) -> bool:
+        """Reanudar solicitud - calcular tiempo pausado y acumular"""
+        try:
+            id_sharepoint = self._obtener_id_elemento_sharepoint(id_solicitud)
+            if not id_sharepoint:
+                return False
+            
+            headers = self._obtener_headers()
+            if not headers.get('Authorization'):
+                return False
+            
+            # Obtener datos actuales
+            solicitud_actual = self.obtener_solicitud_por_id(id_solicitud)
+            if solicitud_actual.empty:
+                return False
+            
+            solicitud = solicitud_actual.iloc[0]
+            fecha_pausa = solicitud.get('fecha_pausa')
+            tiempo_pausado_acumulado = solicitud.get('tiempo_pausado_dias', 0)
+            historial_actual = solicitud.get('historial_pausas', '')
+            
+            # Calcular tiempo de esta pausa
+            tiempo_pausa_actual = 0
+            if fecha_pausa and pd.notna(fecha_pausa):
+                fecha_pausa_norm = convertir_a_colombia(fecha_pausa)
+                tiempo_pausa_actual = (obtener_fecha_actual_colombia() - fecha_pausa_norm).total_seconds() / (24 * 3600)
+            
+            # Acumular tiempo pausado
+            tiempo_pausado_total = tiempo_pausado_acumulado + tiempo_pausa_actual
+            
+            # Actualizar historial
+            nueva_entrada = f"[{obtener_fecha_actual_colombia().strftime('%d/%m/%Y %H:%M')}] REANUDADA - {motivo} (Pausada {tiempo_pausa_actual:.1f} días)"
+            historial_actualizado = f"{historial_actual}\n{nueva_entrada}" if historial_actual else nueva_entrada
+            
+            datos_reanudacion = {
+                'TiempoPausadoDias': round(tiempo_pausado_total, 2),
+                'FechaPausa': None,  # Limpiar fecha de pausa
+                'HistorialPausas': historial_actualizado
+            }
+            
+            url_actualizar = f"{self.configuracion_graph['graph_url']}/sites/{self.id_sitio_sharepoint}/lists/{self.id_lista}/items/{id_sharepoint}/fields"
+            response = requests.patch(url_actualizar, headers=headers, json=datos_reanudacion)
+            
+            return response.status_code in [200, 204]
+            
+        except Exception as e:
+            print(f"Error reanudando solicitud: {e}")
+            return False
