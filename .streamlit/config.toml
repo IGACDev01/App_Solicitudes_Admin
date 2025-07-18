@@ -8,9 +8,12 @@ base="light"
 primaryColor="#006AB3"
 secondaryBackgroundColor="#f0f2f6"
 
+[[theme.fontFaces]]
 # Font settings
-family = "Gill Sans"
-url = "app/static/Gill Sans.otf"
+family = "GillSans"
+url = "app/static/GillSans.otf"
+weight = "400"
+style = "normal"
 
 
 
