@@ -10,7 +10,7 @@ secondaryBackgroundColor="#f0f2f6"
 
 # Font settings
 family = "Gill Sans"
-url = "Theme/Gill Sans.otf"
+url = "app/static/Gill Sans.otf"
 
 
 

@@ -17,7 +17,7 @@ st.markdown("""
 <style>
     .main-header {
         background: #006AB3;
-        padding: 0.1rem;
+        padding: 1rem;
         border-radius: 10px;
         margin-bottom: 2rem;
         color: white;
