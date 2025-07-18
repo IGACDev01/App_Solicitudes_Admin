@@ -1,6 +1,17 @@
+[server]
+enableStaticServing = true
+
 [theme]
+
+# Color settings
 base="light"
 primaryColor="#006AB3"
 secondaryBackgroundColor="#f0f2f6"
+
+# Font settings
+family = "Gill Sans"
+url = "Theme/Gill Sans.otf"
+
+
 
  
