@@ -465,8 +465,8 @@ class GestorListasSharePoint:
             if comentarios:
                 datos_actualizacion['ComentariosAdmin'] = comentarios
             
-            # Manejar completado
-            if nuevo_estado == 'Completado':
+            # Manejar Completada
+            if nuevo_estado == 'Completada':
                 datos_actualizacion['FechaCompletado'] = tiempo_actual_utc
                 
                 # Cálculo de tiempo de resolución para considerar pausas
@@ -742,6 +742,7 @@ class GestorListasSharePoint:
                 'total_solicitudes': 0,
                 'solicitudes_activas': 0,
                 'solicitudes_completadas': 0,
+                'solicitudes_incompletas': 0,
                 'tiempo_promedio_respuesta': 0,
                 'tiempo_promedio_resolucion': 0,
                 'solicitudes_por_estado': {},
@@ -754,14 +755,15 @@ class GestorListasSharePoint:
         
         try:
             total = len(self.df)
-            activas = len(self.df[self.df['estado'] != 'Completado'])
-            completadas = len(self.df[self.df['estado'] == 'Completado'])
+            activas = len(self.df[self.df['estado'] != 'Completada'])
+            completadas = len(self.df[self.df['estado'] == 'Completada'])
+            incompletas = len(self.df[self.df['estado'] == 'Incompleta'])
             
             # Calcular promedios
             solicitudes_con_respuesta = self.df[self.df['tiempo_respuesta_dias'] > 0]
             tiempo_promedio_respuesta = solicitudes_con_respuesta['tiempo_respuesta_dias'].mean() if not solicitudes_con_respuesta.empty else 0
             
-            solicitudes_completadas = self.df[self.df['estado'] == 'Completado']
+            solicitudes_completadas = self.df[self.df['estado'] == 'Completada']
             tiempo_promedio_resolucion = solicitudes_completadas['tiempo_resolucion_dias'].mean() if not solicitudes_completadas.empty else 0
             
             # Generar distribuciones
@@ -802,6 +804,7 @@ class GestorListasSharePoint:
                 'total_solicitudes': total,
                 'solicitudes_activas': activas,
                 'solicitudes_completadas': completadas,
+                'solicitudes_incompletas': len(self.df[self.df['estado'] == 'Incompleta']),
                 'tiempo_promedio_respuesta': round(tiempo_promedio_respuesta, 2),
                 'tiempo_promedio_resolucion': round(tiempo_promedio_resolucion, 2),
                 'solicitudes_por_estado': por_estado,
@@ -817,6 +820,7 @@ class GestorListasSharePoint:
                 'total_solicitudes': 0,
                 'solicitudes_activas': 0,
                 'solicitudes_completadas': 0,
+                'solicitudes_incompletas': 0,
                 'tiempo_promedio_respuesta': 0,
                 'tiempo_promedio_resolucion': 0,
                 'solicitudes_por_estado': {},

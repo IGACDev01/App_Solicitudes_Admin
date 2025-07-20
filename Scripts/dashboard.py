@@ -191,10 +191,7 @@ def mostrar_tab_dashboard(gestor_datos):
     
     # Métricas principales
     st.subheader("📈 Métricas Principales")
-    mostrar_metricas_principales(resumen)
-
-    # Métricas tiempo
-    mostrar_metricas_tiempo(resumen)
+    mostrar_metricas_principales(gestor_datos)
        
     st.markdown("---")
     
@@ -209,13 +206,13 @@ def mostrar_tab_dashboard(gestor_datos):
     
     with col2:
         mostrar_grafico_prioridades(gestor_datos)
-    
+
     # Segunda fila de gráficos
-    mostrar_grafico_tipos(resumen)
+    mostrar_grafico_procesos(gestor_datos)
     
     # Tercera fila de gráficos
-    mostrar_grafico_procesos(gestor_datos)
-        
+    mostrar_grafico_tipos(resumen)
+       
     # Cuarta fila de gráficos
     mostrar_grafico_territoriales(gestor_datos)
     
@@ -410,7 +407,7 @@ def mostrar_visualizador_dataframe(gestor_datos):
         
         with stat_col3:
             if 'tiempo_resolucion_dias' in df_filtrado.columns:
-                completadas = df_filtrado[df_filtrado['estado'] == 'Completado']
+                completadas = df_filtrado[df_filtrado['estado'] == 'Completada']
                 if not completadas.empty and 'tiempo_resolucion_dias' in completadas.columns:
                     tiempo_promedio = completadas['tiempo_resolucion_dias'].mean()
                     st.metric("Tiempo Prom. Resolución", f"{tiempo_promedio:.1f} días")
@@ -440,7 +437,7 @@ def mostrar_alertas_sistema(gestor_datos):
             
             solicitudes_antiguas = df[
                 (df['fecha_actualizacion_limpia'] < fecha_limite) & 
-                (df['estado'] != 'Completado')
+                (df['estado'] != 'Completada')
             ]
             
             if not solicitudes_antiguas.empty:
@@ -476,63 +473,86 @@ def mostrar_alertas_sistema(gestor_datos):
             elif alerta['tipo'] == 'error':
                 st.error(f"**{alerta['titulo']}**: {alerta['mensaje']}")
         
-def mostrar_metricas_principales(resumen):
-    """Mostrar métricas principales en tarjetas"""
-    col1, col2, col3 = st.columns(3)
+def mostrar_metricas_principales(gestor_datos):
+    """Mostrar métricas principales en 4 filas"""
+    df = gestor_datos.obtener_todas_solicitudes()
     
-    with col1:
-        st.metric(
-            label="📋 Total Solicitudes",
-            value=resumen['total_solicitudes'],
-            delta=None
-        )
+    if df.empty:
+        st.info("No hay datos disponibles")
+        return
     
-    with col2:
-        st.metric(
-            label="🔄 Solicitudes Activas",
-            value=resumen['solicitudes_activas'],
-            delta=None
-        )
+    # Calcular métricas
+    total = len(df)
+    activas = len(df[df['estado'] != 'Completada'])
+    incompletas = len(df[df['estado'] == 'Incompleta'])
+    completadas = len(df[df['estado'] == 'Completada'])
     
-    with col3:
-        st.metric(
-            label="✅ Completadas",
-            value=resumen['solicitudes_completadas'],
-            delta=None
-        )
-
-def mostrar_metricas_tiempo(resumen):
-    """Mostrar métricas de tiempo en tarjetas"""
-    col1, col2, col3 = st.columns(3)
+    # Tiempos medianos
+    tiempo_respuesta_mediano = df[df['tiempo_respuesta_dias'] > 0]['tiempo_respuesta_dias'].median()
+    tiempo_resolucion_mediano = df[df['estado'] == 'Completada']['tiempo_resolucion_dias'].median()
+    tiempo_pausa_mediano = df[df['tiempo_pausado_dias'] > 0]['tiempo_pausado_dias'].median()
+    
+    # Tasa de resolución
+    tasa_resolucion = (completadas / total * 100) if total > 0 else 0
+    
+    # Procesos con mejor y peor tiempo de resolución
+    tiempos_por_proceso = df[df['estado'] == 'Completada'].groupby('proceso')['tiempo_resolucion_dias'].median().sort_values()
+    proceso_mas_rapido = tiempos_por_proceso.index[0] if not tiempos_por_proceso.empty else "N/A"
+    proceso_mas_lento = tiempos_por_proceso.index[-1] if not tiempos_por_proceso.empty else "N/A"
+     
         
+    col1, col2, col3, col4 = st.columns(4)
+    
     with col1:
-        tiempo_respuesta = resumen['tiempo_promedio_respuesta']
-        valor_respuesta = formatear_tiempo_dashboard(tiempo_respuesta) if tiempo_respuesta > 0 else "N/A"
-        st.metric(
-            label="⏱️ Tiempo Prom. Respuesta",
-            value=valor_respuesta,
-            delta=None
-        )
+        st.metric("📋 Total Solicitudes", total, 
+                   help="Cuenta todas las solicitudes sin importar su estado actual")
     
     with col2:
-        tiempo_resolucion = resumen['tiempo_promedio_resolucion']
-        valor_resolucion = formatear_tiempo_dashboard(tiempo_resolucion) if tiempo_resolucion > 0 else "N/A"
-        st.metric(
-            label="🏁 Tiempo Prom. Resolución",
-            value=valor_resolucion,
-            delta=None
-        )
+        st.metric("🔄 Solicitudes Activas", activas, 
+                  help="Solicitudes que no están completadas. Incluye estados: Asignada y En Proceso")
+        
     
     with col3:
-        if resumen['total_solicitudes'] > 0:
-            tasa_resolucion = (resumen['solicitudes_completadas'] / resumen['total_solicitudes']) * 100
-            st.metric(
-                label="📈 Tasa de Resolución",
-                value=f"{tasa_resolucion:.1f}%",
-                delta=None
-            )
-      
-
+        st.metric("🟠 Incompletas", incompletas,
+                   help="Solicitudes en estado 'Incompleta' que requieren información adicional")
+    
+    with col4:
+        st.metric("✅ Completadas", completadas,
+                   help="Solicitudes que han llegado al estado 'Completado'")
+    
+    # Segunda fila
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        valor_respuesta = f"{tiempo_respuesta_mediano:.1f} días" if pd.notna(tiempo_respuesta_mediano) else "N/A"
+        st.metric("⏱️ Tiempo Mediano Respuesta", valor_respuesta,
+                   help="Mediana del tiempo entre 'Asignada' y 'En Proceso' (excluye valores en 0)")
+    
+    with col2:
+        valor_resolucion = f"{tiempo_resolucion_mediano:.1f} días" if pd.notna(tiempo_resolucion_mediano) else "N/A"
+        st.metric("🏁 Tiempo Mediano Resolución", valor_resolucion,
+                   help="Mediana del tiempo entre creación y estado 'Completada' (descontando pausas)")
+    
+    with col3:
+        valor_pausa = f"{tiempo_pausa_mediano:.1f} días" if pd.notna(tiempo_pausa_mediano) else "N/A"
+        st.metric("⏸️ Tiempo Mediano Pausa", valor_pausa,
+                   help="Mediana de días que las solicitudes han estado pausadas (solo solicitudes con pausas)")
+    
+    # Tercera fila
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("📈 Tasa de Resolución", f"{tasa_resolucion:.1f}%",
+                   help="(Solicitudes Completadas / Total de Solicitudes) × 100")
+    
+    with col2:
+        st.metric("🚀 Proceso Más Rápido", proceso_mas_rapido,
+                   help="Proceso con menor tiempo mediano de resolución")
+    
+    with col3:
+        st.metric("🐌 Proceso Más Lento", proceso_mas_lento,
+                   help="Proceso con mayor tiempo mediano de resolución")
+    
 def mostrar_grafico_estados(resumen):
     """Mostrar gráfico de distribución por estados"""
     
@@ -541,10 +561,11 @@ def mostrar_grafico_estados(resumen):
     if datos_estados:
         # Colores personalizados para cada estado
         colores = {
-            'Asignada': '#FFA726',
-            'En Proceso': '#42A5F5', 
-            'Completado': '#66BB6A',
-            'Cancelado': '#EF5350'
+            'Asignada': '#fad358',
+            'En Proceso': '#42A5F5',
+            'Incompleta': '#fd894a', 
+            'Completada': '#66BB6A',
+            'Cancelada': '#EF5350'
         }
         
         fig = go.Figure(data=[
@@ -805,10 +826,11 @@ def mostrar_analisis_temporal(gestor_datos):
                 
                 # Colores para estados
                 colores_estado = {
-                    'Asignada': '#FFA726',
-                    'En Proceso': '#42A5F5', 
-                    'Completado': '#66BB6A',
-                    'Cancelado': '#EF5350'
+                    'Asignada': '#fad358',
+                    'En Proceso': '#42A5F5',
+                    'Incompleta': '#fd894a', 
+                    'Completada': '#66BB6A',
+                    'Cancelada': '#EF5350'
                 }
                 
                 fig = px.bar(
@@ -887,7 +909,7 @@ def mostrar_analisis_temporal(gestor_datos):
             
             # Gráfico de tiempo promedio de resolución por período
             if 'tiempo_resolucion_dias' in df.columns:
-                completadas = df[df['estado'] == 'Completado'].copy()
+                completadas = df[df['estado'] == 'Completada'].copy()
                 if not completadas.empty:
                     # Usar misma selección de período para tiempo de resolución
                     if periodo_temporal == "Día":

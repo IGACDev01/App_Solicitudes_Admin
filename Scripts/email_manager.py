@@ -479,8 +479,8 @@ class GestorNotificacionesEmail:
         "Asignada": "🟡",
         "En Proceso": "🔵", 
         "Incompleta": "🟠",
-        "Completado": "✅",
-        "Cancelado": "❌"
+        "Completada": "✅",
+        "Cancelada": "❌"
         }
         
         seccion_archivo_adjunto = ""
@@ -566,8 +566,8 @@ class GestorNotificacionesEmail:
                 "Asignada": "🟡", 
                 "En Proceso": "🔵", 
                 "Incompleta": "🟠", 
-                "Completado": "✅", 
-                "Cancelado": "❌"
+                "Completada": "✅", 
+                "Cancelada": "❌"
             }
             emoji_anterior = emojis_estado.get(cambios['estado']['old'], '🔹')
             emoji_nuevo = emojis_estado.get(cambios['estado']['new'], '🔹')
@@ -690,8 +690,8 @@ class GestorNotificacionesEmail:
                 "Asignada": "🟡", 
                 "En Proceso": "🔵", 
                 "Incompleta": "🟠",
-                "Completado": "✅", 
-                "Cancelado": "❌"
+                "Completada": "✅", 
+                "Cancelada": "❌"
             }
             emoji_nuevo = emojis_estado.get(cambios['estado']['new'], '🔹')
             html_cambios += f"""

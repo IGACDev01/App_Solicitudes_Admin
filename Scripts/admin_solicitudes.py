@@ -234,7 +234,7 @@ def mostrar_mini_dashboard(df, proceso):
         st.metric("🟠 Incompletas", incompletas)
     
     with col5:
-        completadas = len(df[df['estado'] == 'Completado'])
+        completadas = len(df[df['estado'] == 'Completada'])
         st.metric("✅ Completadas", completadas)
     
     # Alertas
@@ -385,7 +385,7 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
     
     if estado == 'Asignada':
         emoji = "🟡"
-    elif estado == 'Completado':
+    elif estado == 'Completada':
         emoji = "✅"
     elif estado == 'En Proceso':
         emoji = "🔵"
@@ -506,8 +506,8 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
             with col1:
                 nuevo_estado = st.selectbox(
                     "Estado:",
-                    options=["Asignada", "En Proceso", "Incompleta", "Completado", "Cancelado"],
-                    index=["Asignada", "En Proceso", "Incompleta", "Completado", "Cancelado"].index(solicitud['estado']),
+                    options=["Asignada", "En Proceso", "Incompleta", "Completada", "Cancelada"],
+                    index=["Asignada", "En Proceso", "Incompleta", "Completada", "Cancelada"].index(solicitud['estado']),
                     key=f"estado_{solicitud['id_solicitud']}"
                 )
                     
@@ -648,8 +648,8 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
         # Validación de transiciones de estado:
         estado_actual = solicitud['estado']
         
-        # Validar transición a Completado desde Incompleta
-        if estado_actual == 'Incompleta' and nuevo_estado == 'Completado':
+        # Validar transición a Completada desde Incompleta
+        if estado_actual == 'Incompleta' and nuevo_estado == 'Completada':
             st.error("❌ No se puede completar una solicitud incompleta. Primero reanúdela cambiando a 'En Proceso'.")
             return False
 
