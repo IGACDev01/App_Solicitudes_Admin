@@ -457,25 +457,26 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                 key=f"desc_{solicitud['id_solicitud']}"
             )
         
-        # Historial de comentarios
+        # Historial de comentarios administrativos
         st.markdown("---")
         comentarios_actuales = solicitud.get('comentarios_admin', '')
-        
+
         if comentarios_actuales and comentarios_actuales.strip():
             st.markdown("**💬 Historial de Comentarios Administrativos**")
-            
-            if '[' in comentarios_actuales and ']:' in comentarios_actuales:
-                comentarios_formateados = formatear_comentarios_administrador_para_mostrar(comentarios_actuales)
-                comentarios_limpios = limpiar_contenido_html(comentarios_actuales)
-                num_comentarios = len([c for c in comentarios_limpios.split('\n\n') if c.strip()])
-                
-                with st.expander(f"Ver {num_comentarios} comentario(s) previo(s)", expanded=False):
-                    st.markdown(comentarios_formateados)
-            else:
-                comentario_limpio = limpiar_contenido_html(comentarios_actuales)
-                st.info(f"**Comentario previo:** {comentario_limpio}")
+            comentario_limpio = limpiar_contenido_html(comentarios_actuales)
+            st.info(f"**Comentario administrativo previo:** {comentario_limpio}")
         else:
-            st.markdown("**💬 Sin comentarios previos**")
+            st.markdown("**💬 Sin comentarios administrativos previos**")
+
+        # Comentarios adicionales del usuario
+        comentarios_usuario = solicitud.get('comentarios_usuario', '')
+
+        if comentarios_usuario and comentarios_usuario.strip():
+            st.markdown("**👤 Comentarios Adicionales del Usuario**")
+            comentario_limpio = limpiar_contenido_html(comentarios_usuario)
+            st.success(f"**Comentarios adicionales del usuario:** {comentario_limpio}")
+        else:
+            st.markdown("**👤 Sin comentarios adicionales del usuario**")
 
         # Historial de pausas
         historial_pausas = solicitud.get('historial_pausas', '')
@@ -491,10 +492,10 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                     key=f"pausas_{solicitud['id_solicitud']}"
                 )
         
-        # Sección de archivos
+        # Sección de archivos en expander
         st.markdown("---")
-        st.markdown("**📎 Archivos**")
-        mostrar_archivos_adjuntos_administrador(gestor_datos, solicitud['id_solicitud'])
+        with st.expander("📎 Archivos Adjuntos", expanded=False):
+            mostrar_archivos_adjuntos_administrador(gestor_datos, solicitud['id_solicitud'])
         
         st.markdown("---")
         
@@ -580,7 +581,7 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                     responsable, email_responsable, nuevo_comentario,
                     notificar_solicitante, notificar_responsable, archivos_nuevos
                 )
-                
+
 def mostrar_archivos_adjuntos_administrador(gestor_datos, id_solicitud):
     """Mostrar archivos adjuntos con layout mejorado desde seguimiento"""
     

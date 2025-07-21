@@ -773,3 +773,4 @@ class GestorNotificacionesEmail:
         </body>
         </html>
         """
+    
