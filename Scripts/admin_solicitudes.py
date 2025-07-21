@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from email_manager import GestorNotificacionesEmail
 import plotly.graph_objects as go
 from timezone_utils_admin import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
+from utils import invalidar_y_actualizar_cache
 
 # Credenciales por proceso
 CREDENCIALES_ADMINISTRADORES = {
@@ -99,6 +100,7 @@ def mostrar_tab_administrador(gestor_datos):
         st.header(f"⚙️ Panel de Administración - {proceso_admin}")
     with col2:
         if st.button("🔄 Actualizar Datos", key="actualizar_admin"):
+            invalidar_y_actualizar_cache()
             st.cache_resource.clear()
             st.rerun()
     with col3:
@@ -785,7 +787,11 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
 
         # Paso 5: Recargar datos y mostrar éxito
         gestor_datos.cargar_datos(forzar_recarga=True)
-        
+
+
+        # Borrar cache y forzar actualización
+        invalidar_y_actualizar_cache()
+       
         # Mostrar mensaje de éxito limpio
         st.success(f"✅ Solicitud {solicitud['id_solicitud']} actualizada correctamente")
         

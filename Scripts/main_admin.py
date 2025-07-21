@@ -1,9 +1,11 @@
 import streamlit as st
+import time
 import pandas as pd
 from sharepoint_list_manager import GestorListasSharePoint
 from dashboard import mostrar_tab_dashboard
 from timezone_utils_admin import obtener_fecha_actual_colombia
 from admin_solicitudes import mostrar_tab_administrador
+from utils import obtener_cache_key
 
 # Configuración de página
 st.set_page_config(
@@ -57,8 +59,17 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def invalidar_cache_datos():
+    """Invalidar cache de datos después de operaciones de escritura"""
+    try:
+        # Clear the specific cache function
+        obtener_datos_sharepoint_en_cache.clear()
+        print("✅ Cache de datos invalidado")
+    except Exception as e:
+        print(f"⚠️ Error invalidando cache: {e}")
+
 @st.cache_data(ttl=60)
-def obtener_datos_sharepoint_en_cache():
+def obtener_datos_sharepoint_en_cache(cache_key: str = "default"):
     """Obtener datos SharePoint con caché"""
     gestor_datos = obtener_gestor_datos()
     gestor_datos.cargar_datos()
@@ -111,16 +122,23 @@ def main():
     
     # Obtener gestor de datos (en caché)
     gestor_datos = obtener_gestor_datos()
+
+
+    # Llave de cache para forzar la actualización
+    cache_key = obtener_cache_key()
     
     # Obtener datos en caché en lugar de refrescar siempre
-    df_en_cache = obtener_datos_sharepoint_en_cache()
-    gestor_datos.df = df_en_cache  # Establecer los datos en caché
+    df_en_cache = obtener_datos_sharepoint_en_cache(cache_key)
+    gestor_datos.df = df_en_cache
     
     # Mostrar estado de conexión
     estado = gestor_datos.obtener_estado_sharepoint()
     if not estado['sharepoint_conectado']:
-        st.error("❌ Falló conexión con Lista SharePoint. Por favor verifique su configuración.")
-        st.stop()
+        error_msg = estado.get('error_mensaje', 'Error de conexión desconocido')
+        st.error(f"❌ SharePoint: {error_msg}")
+        st.info("🔄 Actualizando página en 10 segundos...")
+        time.sleep(10)
+        st.rerun()
 
     # Mostrar frescura de datos - simplificado sin get_stats()
     if not df_en_cache.empty:

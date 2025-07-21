@@ -2,6 +2,8 @@ import pandas as pd
 import os
 import streamlit as st
 import uuid
+import time
+import random
 from datetime import datetime, timedelta
 import requests
 from typing import Dict, Any, Optional, List
@@ -60,56 +62,116 @@ class GestorListasSharePoint:
         }
     
     def _obtener_token_acceso(self) -> Optional[str]:
-        """Obtener token de acceso para Microsoft Graph API"""
+        """Obtener token de acceso para Microsoft Graph API con retry logic"""
+        
+        # Check if we have a valid cached token
         if (hasattr(self, '_token_cache') and hasattr(self, '_token_expira_en') and 
             datetime.now() < self._token_expira_en):
             return self._token_cache
         
-        try:
-            url_token = f"https://login.microsoftonline.com/{self.configuracion_graph['tenant_id']}/oauth2/v2.0/token"
-            
-            datos_token = {
-                'grant_type': 'client_credentials',
-                'client_id': self.configuracion_graph['client_id'],
-                'client_secret': self.configuracion_graph['client_secret'],
-                'scope': 'https://graph.microsoft.com/.default'
-            }
-            
-            headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-            
-            response = requests.post(url_token, data=datos_token, headers=headers)
-            
-            if response.status_code == 200:
-                info_token = response.json()
-                token_acceso = info_token.get('access_token')
-                expira_en = info_token.get('expires_in', 3600)
+        # Retry configuration
+        max_retries = 3
+        base_delay = 1  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                url_token = f"https://login.microsoftonline.com/{self.configuracion_graph['tenant_id']}/oauth2/v2.0/token"
                 
-                self._token_cache = token_acceso
-                self._token_expira_en = datetime.now() + timedelta(seconds=expira_en - 300)
+                datos_token = {
+                    'grant_type': 'client_credentials',
+                    'client_id': self.configuracion_graph['client_id'],
+                    'client_secret': self.configuracion_graph['client_secret'],
+                    'scope': 'https://graph.microsoft.com/.default'
+                }
                 
-                print("Token de SharePoint obtenido exitosamente")
-                return token_acceso
-            else:
-                info_error = response.json()
-                print(f"Falló autenticación de SharePoint: {info_error.get('error_description', 'Error desconocido')}")
-                return None
+                headers = {'Content-Type': 'application/x-www-form-urlencoded'}
                 
-        except Exception as e:
-            print(f"Error en autenticación de SharePoint: {e}")
-            return None
-    
+                # Add timeout to prevent hanging
+                response = requests.post(url_token, data=datos_token, headers=headers, timeout=30)
+                
+                if response.status_code == 200:
+                    info_token = response.json()
+                    token_acceso = info_token.get('access_token')
+                    expira_en = info_token.get('expires_in', 3600)
+                    
+                    self._token_cache = token_acceso
+                    self._token_expira_en = datetime.now() + timedelta(seconds=expira_en - 300)
+                    
+                    print(f"✅ Token de SharePoint obtenido exitosamente (intento {attempt + 1})")
+                    return token_acceso
+                
+                else:
+                    # Handle specific error codes
+                    if response.status_code == 400:
+                        print("❌ Error de configuración OAuth - verifique credenciales")
+                        return None  # Don't retry for config errors
+                    elif response.status_code == 401:
+                        print("❌ Credenciales inválidas")
+                        return None  # Don't retry for auth errors
+                    elif response.status_code in [429, 503, 504]:
+                        # Rate limiting or server errors - retry with backoff
+                        delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                        print(f"⚠️ Error temporal ({response.status_code}), reintentando en {delay:.1f}s...")
+                        if attempt < max_retries - 1:
+                            time.sleep(delay)
+                            continue
+                    else:
+                        info_error = response.json() if response.headers.get('content-type', '').startswith('application/json') else {}
+                        error_desc = info_error.get('error_description', f'HTTP {response.status_code}')
+                        print(f"❌ Error en autenticación SharePoint: {error_desc}")
+                        
+                        # Retry for unknown errors
+                        if attempt < max_retries - 1:
+                            delay = base_delay * (2 ** attempt)
+                            print(f"🔄 Reintentando en {delay}s...")
+                            time.sleep(delay)
+                            continue
+                    
+            except requests.exceptions.Timeout:
+                print(f"⏱️ Timeout en autenticación (intento {attempt + 1})")
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    time.sleep(delay)
+                    continue
+                    
+            except requests.exceptions.ConnectionError:
+                print(f"🌐 Error de conexión (intento {attempt + 1})")
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    time.sleep(delay)
+                    continue
+                    
+            except Exception as e:
+                print(f"❌ Error inesperado en autenticación: {e}")
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    time.sleep(delay)
+                    continue
+        
+        # All retries failed
+        print(f"❌ Falló autenticación SharePoint después de {max_retries} intentos")
+        return None
+
     def _obtener_headers(self) -> Dict[str, str]:
-        """Obtener headers para peticiones Graph API"""
+        """Obtener headers para peticiones Graph API con retry automático"""
         token = self._obtener_token_acceso()
         if not token:
-            return {}
+            # Try one more time with cache clear
+            if hasattr(self, '_token_cache'):
+                delattr(self, '_token_cache')
+            if hasattr(self, '_token_expira_en'):
+                delattr(self, '_token_expira_en')
+            
+            token = self._obtener_token_acceso()
+            if not token:
+                return {}
         
         return {
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         }
-    
+
     def _obtener_id_sitio_sharepoint(self) -> Optional[str]:
         """Obtener ID del sitio SharePoint"""
         if hasattr(self, '_id_sitio_cache'):
@@ -831,19 +893,44 @@ class GestorListasSharePoint:
                 'solicitudes_por_territorial': {},
                 'solicitudes_por_mes': {}
             }
-    
+
     def obtener_estado_sharepoint(self) -> Dict[str, Any]:
         """Obtener estado de conexión SharePoint"""
-        return {
-            'sharepoint_conectado': bool(self.id_lista),
+        estado = {
+            'sharepoint_conectado': False,
             'id_sitio': self.id_sitio_sharepoint,
             'id_lista': self.id_lista,
             'nombre_lista': self.nombre_lista,
-            'token_disponible': bool(self._obtener_token_acceso()),
+            'token_disponible': False,
             'url_sitio': self.configuracion_graph.get('sharepoint_site_url'),
-            'drive_destino_conectado': bool(self.id_drive_destino)
+            'drive_destino_conectado': bool(self.id_drive_destino),
+            'error_mensaje': None
         }
         
+        # Test token availability
+        token = self._obtener_token_acceso()
+        estado['token_disponible'] = bool(token)
+        
+        if not token:
+            estado['error_mensaje'] = "No se pudo obtener token de autenticación"
+            return estado
+        
+        # Simple connection test - just check if we have what we need
+        try:
+            headers = self._obtener_headers()
+            if headers.get('Authorization'):
+                # If we have a lista ID, we're connected
+                estado['sharepoint_conectado'] = bool(self.id_lista)
+                if not self.id_lista:
+                    estado['error_mensaje'] = f"Lista '{self.nombre_lista}' no encontrada"
+            else:
+                estado['error_mensaje'] = "No se pudieron obtener headers de autorización"
+                
+        except Exception as e:
+            estado['error_mensaje'] = f"Error de conexión: {str(e)}"
+        
+        return estado
+
     def _gestionar_pausa_reanudacion(self, id_solicitud: str, estado_anterior: str, nuevo_estado: str, motivo: str = ""):
         """Gestionar lógica de pausa y reanudación"""
         try:

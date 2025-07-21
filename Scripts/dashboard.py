@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import timedelta
+from utils import invalidar_y_actualizar_cache
 from timezone_utils_admin import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
 
 
@@ -119,7 +120,7 @@ def mostrar_tab_dashboard(gestor_datos):
     st.markdown(" ")
 
     if st.button("🔄 Actualizar Datos", key="actualizar_dashboard"):
-        st.cache_data.clear()  # Limpiar el cache
+        invalidar_y_actualizar_cache()
         st.rerun()
     
     st.markdown("---")
