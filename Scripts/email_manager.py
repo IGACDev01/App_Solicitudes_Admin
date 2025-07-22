@@ -73,7 +73,7 @@ class GestorNotificacionesEmail:
             "Almacén": ["TESTalmacengeneral@igac.gov.co"],
             "Apropiaciones": [""],
             "Contabilidad": ["TESTdoris.aragon@igac.gov.co"],
-            "Gestión Administrativa": [""],
+            "Gestión Administrativa": ["TESTserviadministrativo@igac.gov.co"],
             "Gestión Documental": ["TESTgestiondocumental@igac.gov.co"],
             "Infraestructura": ["TESTserviadministrativo@igac.gov.co"],
             "Operación Logística": ["TESTopl@igac.gov.co"],

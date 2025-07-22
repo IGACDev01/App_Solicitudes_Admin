@@ -484,7 +484,7 @@ def mostrar_metricas_principales(gestor_datos):
     
     # Calcular métricas
     total = len(df)
-    activas = len(df[df['estado'] != 'Incompleta'])
+    activas = len(df[(df['estado'] == 'Asignada') | (df['estado'] == 'En Proceso')])
     incompletas = len(df[df['estado'] == 'Incompleta'])
     completadas = len(df[df['estado'] == 'Completada'])
     
@@ -510,7 +510,7 @@ def mostrar_metricas_principales(gestor_datos):
     
     with col2:
         st.metric("🔄 Solicitudes Activas", activas, 
-                  help="Solicitudes que no están completadas. Incluye estados: Asignada y En Proceso")
+                  help="Solicitudes asignadas y en Proceso")
         
     
     with col3:
