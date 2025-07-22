@@ -484,7 +484,7 @@ def mostrar_metricas_principales(gestor_datos):
     
     # Calcular métricas
     total = len(df)
-    activas = len(df[df['estado'] != 'Completada'])
+    activas = len(df[df['estado'] != 'Incompleta'])
     incompletas = len(df[df['estado'] == 'Incompleta'])
     completadas = len(df[df['estado'] == 'Completada'])
     
