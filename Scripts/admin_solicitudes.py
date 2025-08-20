@@ -172,11 +172,6 @@ def mostrar_login_administrador():
                     st.rerun()
                 else:
                     st.error("❌ Credenciales incorrectas")
-    
-    # Mostrar credenciales de prueba
-    with st.expander("💡 Credenciales de Prueba"):
-        for proceso, creds in CREDENCIALES_ADMINISTRADORES.items():
-            st.write(f"**{proceso}:** `{creds['usuario']}` / `{creds['password']}`")
 
 def autenticar_administrador(proceso, usuario, password):
     """Autenticar credenciales"""
