@@ -562,9 +562,9 @@ def mostrar_grafico_estados(resumen):
     if datos_estados:
         # Colores personalizados para cada estado
         colores = {
-            'Asignada': '#fad358',
+            'Asignada': '#FAD358',
             'En Proceso': '#42A5F5',
-            'Incompleta': '#fd894a', 
+            'Incompleta': '#FD894A',
             'Completada': '#66BB6A',
             'Cancelada': '#EF5350'
         }

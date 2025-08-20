@@ -14,7 +14,7 @@ CREDENCIALES_ADMINISTRADORES = {
     "Gestión Administrativa": {"usuario": "admin_gestion_admin", "password": "gestion2025"},
     "Gestión Documental": {"usuario": "admin_gestion_doc", "password": "documental2025"},
     "Infraestructura": {"usuario": "admin_infraestructura", "password": "infraestructura2025"},
-    "Operación Logística": {"usuario": "admin_operacion", "password": "operacion2025"},
+    "Operación Logística SAF": {"usuario": "admin_operacion", "password": "operacion2025"},
     "Presupuesto": {"usuario": "admin_presupuesto", "password": "presupuesto2025"},
     "Seguros y Transporte Especial": {"usuario": "admin_seguros", "password": "seguros2025"},
     "Tesorería": {"usuario": "admin_tesoreria", "password": "tesoreria2025"},
@@ -119,7 +119,7 @@ def mostrar_tab_administrador(gestor_datos):
     ultima_actualizacion = obtener_fecha_actual_colombia().strftime('%H:%M:%S')
     
     if estado['sharepoint_conectado']:
-        st.success(f"✅ SharePoint Conectado - {total_solicitudes} solicitudes | Actualizado: {ultima_actualizacion}")
+        st.success(f"✅ Conectado - Última Actualización: {ultima_actualizacion}")
     else:
         st.error("❌ Error de conexión SharePoint")
         return
@@ -287,7 +287,7 @@ def mostrar_mini_dashboard(df, proceso):
                 labels=datos_estados.index,
                 values=datos_estados.values,
                 hole=0.4,
-                marker=dict(colors=['#FFA726', '#42A5F5', '#FF9800', '#66BB6A', '#EF5350'])
+                marker=dict(colors=['#FAD358', '#42A5F5', '#FD894A', '#66BB6A', '#EF5350'])
             )
         ])
         
