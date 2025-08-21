@@ -8,17 +8,17 @@ from utils import invalidar_y_actualizar_cache
 
 # Credenciales por proceso
 CREDENCIALES_ADMINISTRADORES = {
-    "Almacén": {"usuario": "admin_almacen", "password": "almacen2025"},
-    "Apropiaciones": {"usuario": "admin_apropiaciones", "password": "apropiaciones2025"},
-    "Contabilidad": {"usuario": "admin_contabilidad", "password": "contabilidad2025"},
-    "Gestión Administrativa": {"usuario": "admin_gestion_admin", "password": "gestion2025"},
-    "Gestión Documental": {"usuario": "admin_gestion_doc", "password": "documental2025"},
-    "Infraestructura": {"usuario": "admin_infraestructura", "password": "infraestructura2025"},
-    "Operación Logística SAF": {"usuario": "admin_operacion", "password": "operacion2025"},
-    "Presupuesto": {"usuario": "admin_presupuesto", "password": "presupuesto2025"},
-    "Seguros y Transporte Especial": {"usuario": "admin_seguros", "password": "seguros2025"},
-    "Tesorería": {"usuario": "admin_tesoreria", "password": "tesoreria2025"},
-    "Viáticos": {"usuario": "admin_viaticos", "password": "viaticos2025"}
+    "Almacén": {"usuario": "admin_almacen", "password": "Almacen3455*"},
+    "Archivo": {"usuario": "admin_archivo", "password": "Archivo4790*"},
+    "Contabilidad": {"usuario": "admin_contabilidad", "password": "Contable9865#"},
+    "Contractual": {"usuario": "admin_contractual", "password": "Contractual6518!"},
+    "Correspondencia": {"usuario": "admin_correspondencia", "password": "Correo3981$"},
+    "Infraestructura": {"usuario": "admin_infraestructura", "password": "Infraestructura2387!"},
+    "Operación Logística SAF": {"usuario": "admin_operacion", "password": "Logistica0978#"},
+    "Presupuesto": {"usuario": "admin_presupuesto", "password": "Presupuesto3425$"},
+    "Tesorería": {"usuario": "admin_tesoreria", "password": "Tesoreria9248!"},
+    "Tiquetes": {"usuario": "admin_tiquetes", "password": "Tiquetes9845$"},
+    "Transporte": {"usuario": "admin_transporte", "password": "Transporte5926*"}
 }
 
 def agregar_comentario_administrador(comentario_actual, nuevo_comentario, responsable):
@@ -296,250 +296,375 @@ def mostrar_mini_dashboard(df, proceso):
         st.plotly_chart(fig, use_container_width=True)
 
 def mostrar_filtros_busqueda(df):
-    """Filtros y búsqueda"""
+    """Filtros y búsqueda simplificados con paginación limpia"""
     st.subheader("🔍 Filtros y Búsqueda")
-    
+
     col1, col2, col3 = st.columns(3)
-    
+
     with col1:
-        filtro_estado = st.selectbox(
-            "Estado:",
-            options=["Todos"] + list(df['estado'].unique()),
-            key="filtro_estado"
+        # Filtro múltiple de estados con solicitudes activas por defecto
+        estados_disponibles = list(df['estado'].unique())
+        estados_activos = [estado for estado in estados_disponibles if estado not in ['Completada', 'Cancelada']]
+
+        filtros_estado = st.multiselect(
+            "Estados:",
+            options=estados_disponibles,
+            default=estados_activos,
+            key="filtros_estado_multi"
         )
-    
+
     with col2:
+        # Filtro múltiple de prioridades
         if 'prioridad' in df.columns:
-            filtro_prioridad = st.selectbox(
-                "Prioridad:",
-                options=["Todas"] + list(df['prioridad'].unique()),
-                key="filtro_prioridad"
+            prioridades_disponibles = list(df['prioridad'].unique())
+            filtros_prioridad = st.multiselect(
+                "Prioridades:",
+                options=prioridades_disponibles,
+                default=[],
+                key="filtros_prioridad_multi"
             )
         else:
-            filtro_prioridad = "Todas"
-    
+            filtros_prioridad = []
+
     with col3:
         busqueda = st.text_input(
             "Buscar por ID o nombre:",
             placeholder="ID123 o Juan Pérez",
             key="busqueda_admin"
         )
-    
+
     # Aplicar filtros
     df_filtrado = df.copy()
-    
-    if filtro_estado != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['estado'] == filtro_estado]
-    
-    if filtro_prioridad != "Todas" and 'prioridad' in df_filtrado.columns:
-        df_filtrado = df_filtrado[df_filtrado['prioridad'] == filtro_prioridad]
-    
+
+    # Filtro de estados (múltiple)
+    if filtros_estado:
+        df_filtrado = df_filtrado[df_filtrado['estado'].isin(filtros_estado)]
+
+    # Filtro de prioridades (múltiple)
+    if filtros_prioridad and 'prioridad' in df_filtrado.columns:
+        df_filtrado = df_filtrado[df_filtrado['prioridad'].isin(filtros_prioridad)]
+
+    # Búsqueda de texto
     if busqueda:
         mask = (
-            df_filtrado['id_solicitud'].str.contains(busqueda, case=False, na=False) |
-            df_filtrado['nombre_solicitante'].str.contains(busqueda, case=False, na=False)
+                df_filtrado['id_solicitud'].str.contains(busqueda, case=False, na=False) |
+                df_filtrado['nombre_solicitante'].str.contains(busqueda, case=False, na=False)
         )
         df_filtrado = df_filtrado[mask]
-    
-    # Guardar el DataFrame filtrado en session state
+
+    # === NUEVO: Ordenar TODAS las solicitudes filtradas por fecha (más reciente primero) ===
+    if 'fecha_solicitud' in df_filtrado.columns and not df_filtrado.empty:
+        df_filtrado['fecha_solicitud_normalizada'] = df_filtrado['fecha_solicitud'].apply(normalizar_datetime)
+        df_filtrado = df_filtrado.sort_values('fecha_solicitud_normalizada', ascending=False)
+        # Remover la columna auxiliar
+        df_filtrado = df_filtrado.drop('fecha_solicitud_normalizada', axis=1)
+
+    # Paginación simple (10 elementos fijos)
+    solicitudes_por_pagina = 10
+    total_solicitudes = len(df_filtrado)
+    total_paginas = max(1, (total_solicitudes - 1) // solicitudes_por_pagina + 1)
+
+    # Inicializar página actual si no existe
+    if 'pagina_actual' not in st.session_state:
+        st.session_state.pagina_actual = 1
+
+    # Validar que la página actual no exceda el total
+    if st.session_state.pagina_actual > total_paginas:
+        st.session_state.pagina_actual = 1
+
+    pagina_actual = st.session_state.pagina_actual
+
+    # Aplicar paginación
+    inicio = (pagina_actual - 1) * solicitudes_por_pagina
+    fin = inicio + solicitudes_por_pagina
+    df_paginado = df_filtrado.iloc[inicio:fin]
+
+    # Guardar DataFrames en session state
     st.session_state.df_filtrado = df_filtrado
-    
-    st.write(f"📋 Mostrando {len(df_filtrado)} solicitudes")
+    st.session_state.df_paginado = df_paginado
+    st.session_state.total_paginas = total_paginas
+
+    # Mostrar información de resultados
+    if total_solicitudes > 0:
+        st.write(f"📋 Mostrando {len(df_paginado)} de {total_solicitudes} solicitudes")
+    else:
+        st.write("📋 No se encontraron solicitudes")
+
+def mostrar_paginacion():
+    """Mostrar controles de paginación estilo limpio"""
+    pagina_actual = st.session_state.get('pagina_actual', 1)
+    total_paginas = st.session_state.get('total_paginas', 1)
+
+    if total_paginas <= 1:
+        return
+
+    st.markdown("---")
+
+    # Crear columnas para centrar la paginación
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col2:
+        # Crear botones de paginación
+        cols = st.columns([1, 1, 3, 1, 1])
+
+        # Botón anterior
+        with cols[0]:
+            if st.button("◀", disabled=(pagina_actual <= 1), key="prev_page"):
+                st.session_state.pagina_actual = max(1, pagina_actual - 1)
+                st.rerun()
+
+        # AQUÍ VA EL REEMPLAZO - Números de página como botones
+        with cols[2]:
+            # Mostrar páginas como botones (máximo 5 páginas visibles)
+            paginas_a_mostrar = []
+
+            if total_paginas <= 5:
+                paginas_a_mostrar = list(range(1, total_paginas + 1))
+            else:
+                if pagina_actual <= 3:
+                    paginas_a_mostrar = [1, 2, 3, 4, 5]
+                elif pagina_actual >= total_paginas - 2:
+                    paginas_a_mostrar = list(range(total_paginas - 4, total_paginas + 1))
+                else:
+                    paginas_a_mostrar = list(range(pagina_actual - 2, pagina_actual + 3))
+
+            # Crear mini-columnas para cada número de página
+            mini_cols = st.columns(len(paginas_a_mostrar))
+
+            for i, pagina in enumerate(paginas_a_mostrar):
+                with mini_cols[i]:
+                    if pagina == pagina_actual:
+                        st.markdown(
+                            f"<div style='background: #007bff; color: white; text-align: center; padding: 4px; border-radius: 4px; margin: 2px;'>{pagina}</div>",
+                            unsafe_allow_html=True)
+                    else:
+                        if st.button(str(pagina), key=f"page_{pagina}"):
+                            st.session_state.pagina_actual = pagina
+                            st.rerun()
+
+        # Botón siguiente
+        with cols[4]:
+            if st.button("▶", disabled=(pagina_actual >= total_paginas), key="next_page"):
+                st.session_state.pagina_actual = min(total_paginas, pagina_actual + 1)
+                st.rerun()
 
 def mostrar_lista_solicitudes_administrador_mejorada(gestor_datos, df, proceso):
-    """Lista mejorada con mejor gestión de estado"""
-    
-    df_filtrado = st.session_state.get('df_filtrado', df)
-    
-    if df_filtrado.empty:
+    """Lista mejorada con mejor gestión de estado y paginación"""
+
+    df_paginado = st.session_state.get('df_paginado', df.head(10))
+
+    if df_paginado.empty:
         st.info("🔍 No se encontraron solicitudes con los filtros aplicados")
         return
-    
+
     st.subheader("📋 Gestionar Solicitudes")
-    
-    # Ordenar por prioridad y fecha
-    if 'prioridad' in df_filtrado.columns:
-        orden_prioridad = {'Alta': 0, 'Media': 1, 'Baja': 2, 'Sin asignar': 3}
-        df_filtrado = df_filtrado.copy()
-        df_filtrado['orden_prioridad'] = df_filtrado['prioridad'].map(orden_prioridad).fillna(3)
-        
-        if 'fecha_solicitud' in df_filtrado.columns:
-            df_filtrado['fecha_solicitud_normalizada'] = df_filtrado['fecha_solicitud'].apply(normalizar_datetime)
-            df_filtrado = df_filtrado.sort_values(['orden_prioridad', 'fecha_solicitud_normalizada'])
-        else:
-            df_filtrado = df_filtrado.sort_values(['orden_prioridad'])
-    
-    # Mostrar cada solicitud con función mejorada
-    for idx, solicitud in df_filtrado.iterrows():
+
+    # Las solicitudes ya vienen ordenadas por fecha desde mostrar_filtros_busqueda
+    # No necesitamos ordenar aquí
+
+    # Mostrar cada solicitud de manera optimizada
+    for idx, solicitud in df_paginado.iterrows():
         mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso)
-        
+
+    # Paginación al final
+    mostrar_paginacion()
+
 def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
-    """Versión simplificada con UI más limpia"""
+    """Versión optimizada: datos ligeros siempre, datos pesados solo al expandir"""
     from timezone_utils_admin import convertir_a_colombia, obtener_fecha_actual_colombia
-    # Determinar color y emoji
-    prioridad = solicitud.get('prioridad', 'Media')
+
+    # === DATOS LIGEROS (siempre se cargan) ===
     estado = solicitud['estado']
-    
-    if estado == 'Asignada':
-        emoji = "🟡"
-    elif estado == 'Completada':
-        emoji = "✅"
-    elif estado == 'En Proceso':
-        emoji = "🔵"
-    elif estado == 'Incompleta':
-        emoji = "🟠"
-    else:
-        emoji = "📄"
-    
-    # Verificar actualizaciones recientes
-    clave_actualizado_recientemente = f'actualizado_recientemente_{solicitud["id_solicitud"]}'
-    actualizado_recientemente = st.session_state.get(clave_actualizado_recientemente, None)
-    
+    prioridad = solicitud.get('prioridad', 'Media')
+
+    # Emojis y título (operaciones ligeras)
+    emoji_map = {
+        'Asignada': "🟡", 'Completada': "✅", 'En Proceso': "🔵",
+        'Incompleta': "🟠", 'Cancelada': "❌"
+    }
+    emoji = emoji_map.get(estado, "📄")
+
+    # Título del expander (solo datos básicos)
+    titulo = f"{emoji} {solicitud['id_solicitud']} - {solicitud['nombre_solicitante']} ({estado})"
+    if prioridad not in ['Media', 'Por definir']:
+        titulo += f" - {prioridad}"
+
+    # Verificar si fue actualizado recientemente
+    actualizado_recientemente = st.session_state.get(f'actualizado_recientemente_{solicitud["id_solicitud"]}', None)
     expandido = False
-    mostrar_exito = False
-    
     if actualizado_recientemente:
         diferencia_tiempo = obtener_fecha_actual_colombia() - actualizado_recientemente['timestamp']
-        if diferencia_tiempo.total_seconds() < 30:
-            expandido = True
-            mostrar_exito = True
-        else:
-            del st.session_state[clave_actualizado_recientemente]
-    
-    # Título del expander
-    titulo = f"{emoji} {solicitud['id_solicitud']} - {solicitud['nombre_solicitante']} ({estado})"
-    if prioridad != 'Media':
-        titulo += f" - {prioridad}"
-    
-    with st.expander(titulo, expanded=expandido):
-        
-        # Mostrar mensaje de éxito de actualización brevemente
-        if actualizado_recientemente and mostrar_exito:
-            st.success(f"✅ Solicitud Actualizada")
+        expandido = diferencia_tiempo.total_seconds() < 30
 
-        # Alerta para solicitudes incompletas:
-        if solicitud['estado'] == 'Incompleta':
-            fecha_pausa = solicitud.get('fecha_pausa')
-            if fecha_pausa and pd.notna(fecha_pausa):
-                fecha_pausa_colombia = convertir_a_colombia(fecha_pausa)
-                if fecha_pausa_colombia:
-                    dias_pausada = (obtener_fecha_actual_colombia() - fecha_pausa_colombia).days
-                    st.warning(f"⏸️ Solicitud PAUSADA desde hace {dias_pausada} días")
-        
-        # Información básica
+    # === EXPANDER CON CARGA CONDICIONAL ===
+    with st.expander(titulo, expanded=expandido):
+
+        # Mensaje de éxito si fue actualizado
+        if actualizado_recientemente and expandido:
+            st.success("✅ Solicitud Actualizada")
+
+        # === DATOS PESADOS (solo si el expander está abierto) ===
+        # Detectar si el expander está realmente expandido
+        expander_key = f"expander_data_loaded_{solicitud['id_solicitud']}"
+
+        # Cargar datos pesados solo una vez por sesión o cuando se fuerze
+        if expander_key not in st.session_state:
+            st.session_state[expander_key] = {
+                'descripcion_procesada': None,
+                'comentarios_procesados': None,
+                'historial_pausas': None,
+                'archivos_cargados': False
+            }
+
+        datos_cache = st.session_state[expander_key]
+
+        # === INFORMACIÓN BÁSICA (ligera) ===
         col1, col2 = st.columns(2)
-        
+
         with col1:
             st.write("**📋 Información**")
             st.write(f"**ID:** {solicitud['id_solicitud']}")
             st.write(f"**Solicitante:** {solicitud['nombre_solicitante']}")
             st.write(f"**Email:** {solicitud['email_solicitante']}")
             st.write(f"**Tipo:** {solicitud['tipo_solicitud']}")
-            
+
             if 'territorial' in solicitud and pd.notna(solicitud['territorial']):
                 st.write(f"**Territorial:** {solicitud['territorial']}")
-            
+
             if 'fecha_solicitud' in solicitud:
                 fecha_str = formatear_fecha_colombia(solicitud['fecha_solicitud'])
                 st.write(f"**Fecha:** {fecha_str}")
-        
+
         with col2:
             st.write("**📝 Descripción**")
-            descripcion_limpia = limpiar_contenido_html(solicitud.get('descripcion', ''))
+
+            # Procesar descripción solo si no está en cache
+            if datos_cache['descripcion_procesada'] is None:
+                descripcion_limpia = limpiar_contenido_html(solicitud.get('descripcion', ''))
+                datos_cache['descripcion_procesada'] = descripcion_limpia
+
             st.text_area(
                 "Descripción:",
-                value=descripcion_limpia,
+                value=datos_cache['descripcion_procesada'],
                 height=100,
                 disabled=True,
                 key=f"desc_{solicitud['id_solicitud']}"
             )
-        
-        # Historial de comentarios administrativos
-        st.markdown("---")
-        comentarios_actuales = solicitud.get('comentarios_admin', '')
 
-        if comentarios_actuales and comentarios_actuales.strip():
+        # === COMENTARIOS ADMINISTRATIVOS (procesamiento pesado) ===
+        st.markdown("---")
+
+        if datos_cache['comentarios_procesados'] is None:
+            comentarios_actuales = solicitud.get('comentarios_admin', '')
+            if comentarios_actuales and comentarios_actuales.strip():
+                datos_cache['comentarios_procesados'] = limpiar_contenido_html(comentarios_actuales)
+            else:
+                datos_cache['comentarios_procesados'] = ""
+
+        if datos_cache['comentarios_procesados']:
             st.markdown("**💬 Historial de Comentarios Administrativos**")
-            comentario_limpio = limpiar_contenido_html(comentarios_actuales)
-            st.info(f"**Comentario administrativo previo:** {comentario_limpio}")
+            with st.expander("Ver comentarios completos", expanded=False):
+                st.info(f"**Comentarios:** {datos_cache['comentarios_procesados']}")
         else:
             st.markdown("**💬 Sin comentarios administrativos previos**")
 
-        # Comentarios adicionales del usuario
+        # === COMENTARIOS DEL USUARIO ===
         comentarios_usuario = solicitud.get('comentarios_usuario', '')
-
         if comentarios_usuario and comentarios_usuario.strip():
             st.markdown("**👤 Comentarios Adicionales del Usuario**")
-            comentario_limpio = limpiar_contenido_html(comentarios_usuario)
-            st.success(f"**Comentarios adicionales del usuario:** {comentario_limpio}")
-        else:
-            st.markdown("**👤 Sin comentarios adicionales del usuario**")
+            comentario_usuario_limpio = limpiar_contenido_html(comentarios_usuario)
+            st.success(f"**Comentarios del usuario:** {comentario_usuario_limpio}")
 
-        # Historial de pausas
-        historial_pausas = solicitud.get('historial_pausas', '')
-        if historial_pausas and historial_pausas.strip():
+        # === HISTORIAL DE PAUSAS (pesado) ===
+        if datos_cache['historial_pausas'] is None:
+            historial_pausas = solicitud.get('historial_pausas', '')
+            datos_cache['historial_pausas'] = historial_pausas
+
+        if datos_cache['historial_pausas'] and datos_cache['historial_pausas'].strip():
             st.markdown("---")
-            st.markdown("**⏸️ Historial de Pausas**")
-            with st.expander("Ver historial de pausas", expanded=False):
+            with st.expander("⏸️ Ver historial de pausas", expanded=False):
                 st.text_area(
                     "Pausas:",
-                    value=historial_pausas,
+                    value=datos_cache['historial_pausas'],
                     height=100,
                     disabled=True,
                     key=f"pausas_{solicitud['id_solicitud']}"
                 )
-        
-        # Sección de archivos en expander
+
+        # === ARCHIVOS ADJUNTOS (muy pesado - carga bajo demanda) ===
         st.markdown("---")
         with st.expander("📎 Archivos Adjuntos", expanded=False):
-            mostrar_archivos_adjuntos_administrador(gestor_datos, solicitud['id_solicitud'])
-        
+            col_btn, col_status = st.columns([1, 2])
+
+            with col_btn:
+                cargar_archivos = st.button(
+                    "🔄 Cargar Archivos",
+                    key=f"load_files_{solicitud['id_solicitud']}"
+                )
+
+            with col_status:
+                if datos_cache['archivos_cargados']:
+                    st.success("✅ Archivos cargados")
+                else:
+                    st.info("👆 Haz clic para cargar archivos")
+
+            # Cargar archivos solo cuando se solicite
+            if cargar_archivos or datos_cache['archivos_cargados']:
+                if not datos_cache['archivos_cargados']:
+                    with st.spinner("Cargando archivos..."):
+                        archivos = mostrar_archivos_adjuntos_administrador_inline(gestor_datos,
+                                                                                  solicitud['id_solicitud'])
+                        datos_cache['archivos_cargados'] = True
+                        datos_cache['archivos_lista'] = archivos
+                else:
+                    # Mostrar archivos ya cargados
+                    archivos = datos_cache.get('archivos_lista', [])
+                    mostrar_lista_archivos_simple(archivos)
+
         st.markdown("---")
-        
-        # Formulario de gestión simplificado
+
+        # === FORMULARIO DE GESTIÓN (ligero) ===
         with st.form(f"gestionar_{solicitud['id_solicitud']}"):
-        
             col1, col2 = st.columns(2)
-            
+
             with col1:
                 nuevo_estado = st.selectbox(
                     "Estado:",
                     options=["Asignada", "En Proceso", "Incompleta", "Completada", "Cancelada"],
-                    index=["Asignada", "En Proceso", "Incompleta", "Completada", "Cancelada"].index(solicitud['estado']),
+                    index=["Asignada", "En Proceso", "Incompleta", "Completada", "Cancelada"].index(
+                        solicitud['estado']),
                     key=f"estado_{solicitud['id_solicitud']}"
                 )
-                    
+
                 prioridad_actual = solicitud.get('prioridad', 'Media')
                 nueva_prioridad = st.selectbox(
                     "Prioridad:",
-                    options=["Sin asignar", "Alta", "Media", "Baja"],
-                    index=["Sin asignar", "Alta", "Media", "Baja"].index(prioridad_actual) if prioridad_actual in ["Sin asignar", "Alta", "Media", "Baja"] else 2,
+                    options=["Por definir", "Alta", "Media", "Baja"],
+                    index=["Por definir", "Alta", "Media", "Baja"].index(prioridad_actual) if prioridad_actual in [
+                        "Por definir", "Alta", "Media", "Baja"] else 2,
                     key=f"prioridad_{solicitud['id_solicitud']}"
                 )
-                
+
                 responsable = st.text_input(
                     "Responsable:",
                     value=solicitud.get('responsable_asignado', ''),
                     key=f"responsable_{solicitud['id_solicitud']}"
                 )
-            
-            with col2:
-                clave_contador = f'contador_comentario_{solicitud["id_solicitud"]}'
-                contador_comentario = st.session_state.get(clave_contador, 0)
 
+            with col2:
                 nuevo_comentario = st.text_area(
                     "Nuevo comentario:",
                     placeholder="Escriba aquí el nuevo comentario...",
                     height=100,
-                    key=f"comentarios_{solicitud['id_solicitud']}_{contador_comentario}"
+                    key=f"comentarios_{solicitud['id_solicitud']}"
                 )
-                
+
                 email_responsable = st.text_input(
                     "Email responsable:",
                     placeholder="responsable@igac.gov.co",
                     key=f"email_resp_{solicitud['id_solicitud']}"
                 )
-            
+
             # Subida de archivos
             archivos_nuevos = st.file_uploader(
                 "Subir archivos:",
@@ -547,7 +672,7 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                 type=['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'jpg', 'jpeg', 'png', 'zip'],
                 key=f"archivos_admin_{solicitud['id_solicitud']}"
             )
-            
+
             # Opciones de notificación
             col1, col2 = st.columns(2)
             with col1:
@@ -556,28 +681,60 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                     value=True,
                     key=f"notificar_usuario_{solicitud['id_solicitud']}"
                 )
-            
+
             with col2:
                 notificar_responsable = st.checkbox(
                     "📧 Notificar al responsable",
                     value=False if not email_responsable else True,
                     key=f"notificar_resp_{solicitud['id_solicitud']}"
                 )
-            
+
             # Botón actualizar
-            actualizar = st.form_submit_button(
-                "💾 Actualizar",
-                type="primary",
-                use_container_width=True
-            )
-            
+            actualizar = st.form_submit_button("💾 Actualizar", type="primary", use_container_width=True)
+
             # Procesar actualización
             if actualizar:
+                # Limpiar cache de datos pesados para forzar recarga después de actualización
+                if expander_key in st.session_state:
+                    del st.session_state[expander_key]
+
                 procesar_actualizacion_sharepoint_simplificada(
-                    gestor_datos, solicitud, nuevo_estado, nueva_prioridad, 
+                    gestor_datos, solicitud, nuevo_estado, nueva_prioridad,
                     responsable, email_responsable, nuevo_comentario,
                     notificar_solicitante, notificar_responsable, archivos_nuevos
                 )
+
+def mostrar_archivos_adjuntos_administrador_inline(gestor_datos, id_solicitud):
+    """Versión inline optimizada para cargar archivos"""
+    try:
+        archivos_adjuntos = gestor_datos.obtener_archivos_adjuntos_solicitud(id_solicitud)
+        mostrar_lista_archivos_simple(archivos_adjuntos)
+        return archivos_adjuntos
+    except Exception as e:
+        st.warning("⚠️ Error al cargar archivos adjuntos")
+        return []
+
+def mostrar_lista_archivos_simple(archivos_adjuntos):
+    """Mostrar lista simple de archivos"""
+    if archivos_adjuntos:
+        st.success(f"📁 Se encontraron {len(archivos_adjuntos)} archivo(s)")
+
+        for archivo in archivos_adjuntos:
+            col1, col2, col3 = st.columns([3, 1, 1])
+
+            with col1:
+                tamaño_mb = archivo['size'] / (1024 * 1024)
+                st.write(f"📄 **{archivo['name']}** ({tamaño_mb:.2f} MB)")
+
+            with col2:
+                if archivo.get('download_url'):
+                    st.markdown(f"[⬇️ Descargar]({archivo['download_url']})")
+
+            with col3:
+                if archivo.get('web_url'):
+                    st.markdown(f"[👁️ Ver]({archivo['web_url']})")
+    else:
+        st.info("📭 No hay archivos adjuntos")
 
 def mostrar_archivos_adjuntos_administrador(gestor_datos, id_solicitud):
     """Mostrar archivos adjuntos con layout mejorado desde seguimiento"""

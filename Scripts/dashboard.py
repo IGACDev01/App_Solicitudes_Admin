@@ -31,7 +31,7 @@ def mostrar_login_dashboard():
 
 def autenticar_dashboard(usuario, password):
     """Autenticar credenciales del dashboard - un solo nivel de administrador"""
-    return usuario == "Admin_IGAC_2025" and password == "Solicitudes*5623"
+    return usuario == "Admin_IGAC_Solicitudes" and password == "Solicitudes*5623"
 
 def formatear_tiempo_dashboard(dias):
     """Formatear tiempo en días para el dashboard"""

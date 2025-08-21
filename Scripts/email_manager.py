@@ -71,28 +71,28 @@ class GestorNotificacionesEmail:
         mapeo_responsables = {
             # Subdirección Administrativa y Financiera
             "Almacén": ["TESTalmacengeneral@igac.gov.co"],
-            "Apropiaciones": [""],
+            "Archivo": ["TESTgestiondocumental@igac.gov.co"],
             "Contabilidad": ["TESTdoris.aragon@igac.gov.co"],
-            "Gestión Administrativa": ["TESTserviadministrativo@igac.gov.co"],
-            "Gestión Documental": ["TESTgestiondocumental@igac.gov.co"],
+            "Contractual": ["TESTcontratacion@igac.gov.co"],
+            "Correspondencia": ["TESTgestiondocumental@igac.gov.co"],
             "Infraestructura": ["TESTserviadministrativo@igac.gov.co"],
-            "Operación Logística": ["TESTopl@igac.gov.co"],
+            "Operación Logística SAF": ["TESTopl@igac.gov.co"],
             "Presupuesto": ["TESTdianap.carvajal@igac.gov.co"],
-            "Seguros y Transporte Especial": ["TESTtransporte@igac.gov.co"],
             "Tesorería": ["TESTmdevia@igac.gov.co"],
-            "Viáticos": ["TESTtiquetes@igac.gov.co"]
+            "Tiquetes": ["TESTtiquetes@igac.gov.co"],
+            "Transporte": ["TESTtransporte@igac.gov.co"]
         }
         
         # Obtener responsables para el proceso
         responsables = mapeo_responsables.get(proceso, [])
         
-        # Si no hay responsables específicos, asignar coordinador general del área
+        # Si no hay responsables específicos, asignar coordinador de la app
         if not responsables:
             if area == "Subdirección Administrativa y Financiera":
-                responsables = ["coordinador.administrativa@igac.gov.co"]
+                responsables = ["juan.vallejo@igac.gov.co"]
             else:
-                responsables = ["admin.general@igac.gov.co"]
-        
+                responsables = ["juan.vallejo@igac.gov.co"]
+
         return responsables
     
     def enviar_notificacion_nueva_solicitud(self, datos_solicitud: Dict[str, Any], id_solicitud: str) -> bool:
