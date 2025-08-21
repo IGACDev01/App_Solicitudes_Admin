@@ -85,15 +85,15 @@ def formatear_comentarios_administrador_para_mostrar(comentarios):
 
 def mostrar_tab_administrador(gestor_datos):
     """Tab principal de administración - optimizado para SharePoint"""
-    
+
     # Verificar autenticación
     if not st.session_state.get('admin_autenticado', False):
         mostrar_login_administrador()
         return
-    
+
     # Obtener proceso del admin autenticado
     proceso_admin = st.session_state.get('proceso_admin', '')
-    
+
     # Header
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
@@ -109,38 +109,38 @@ def mostrar_tab_administrador(gestor_datos):
             st.session_state.proceso_admin = None
             st.session_state.usuario_admin = None
             st.rerun()
-    
+
     # Auto-actualizar datos
     gestor_datos.cargar_datos()
-    
+
     # Indicador de estado de SharePoint
     estado = gestor_datos.obtener_estado_sharepoint()
     total_solicitudes = len(gestor_datos.obtener_todas_solicitudes())
     ultima_actualizacion = obtener_fecha_actual_colombia().strftime('%H:%M:%S')
-    
+
     if estado['sharepoint_conectado']:
         st.success(f"✅ Conectado - Última Actualización: {ultima_actualizacion}")
     else:
         st.error("❌ Error de conexión SharePoint")
         return
-    
+
     st.markdown("---")
-    
+
     # Obtener datos del proceso
     df = obtener_solicitudes_del_proceso(gestor_datos, proceso_admin)
-    
+
     if df.empty:
         st.info(f"📋 No hay solicitudes para {proceso_admin}")
         return
-    
+
     # Mini Dashboard
     mostrar_mini_dashboard(df, proceso_admin)
-    
+
     st.markdown("---")
-    
+
     # Filtros y búsqueda
     mostrar_filtros_busqueda(df)
-    
+
     # Lista de solicitudes para gestionar
     mostrar_lista_solicitudes_administrador_mejorada(gestor_datos, df, proceso_admin)
 
@@ -360,7 +360,7 @@ def mostrar_filtros_busqueda(df):
         df_filtrado = df_filtrado.drop('fecha_solicitud_normalizada', axis=1)
 
     # Paginación simple (10 elementos fijos)
-    solicitudes_por_pagina = 10
+    solicitudes_por_pagina = 5
     total_solicitudes = len(df_filtrado)
     total_paginas = max(1, (total_solicitudes - 1) // solicitudes_por_pagina + 1)
 
@@ -469,8 +469,9 @@ def mostrar_lista_solicitudes_administrador_mejorada(gestor_datos, df, proceso):
     # Paginación al final
     mostrar_paginacion()
 
+
 def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
-    """Versión optimizada: datos ligeros siempre, datos pesados solo al expandir"""
+    """Versión con super lazy loading - archivos solo se cargan al hacer clic"""
     from timezone_utils_admin import convertir_a_colombia, obtener_fecha_actual_colombia
 
     # === DATOS LIGEROS (siempre se cargan) ===
@@ -491,16 +492,16 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
 
     # Verificar si fue actualizado recientemente
     actualizado_recientemente = st.session_state.get(f'actualizado_recientemente_{solicitud["id_solicitud"]}', None)
-    expandido = False
+    expandido_por_actualizacion = False
     if actualizado_recientemente:
         diferencia_tiempo = obtener_fecha_actual_colombia() - actualizado_recientemente['timestamp']
-        expandido = diferencia_tiempo.total_seconds() < 30
+        expandido_por_actualizacion = diferencia_tiempo.total_seconds() < 30
 
-    # === EXPANDER CON CARGA CONDICIONAL ===
-    with st.expander(titulo, expanded=expandido):
+    # === EXPANDER SIMPLE ===
+    with st.expander(titulo, expanded=expandido_por_actualizacion):
 
         # Mensaje de éxito si fue actualizado
-        if actualizado_recientemente and expandido:
+        if actualizado_recientemente and expandido_por_actualizacion:
             st.success("✅ Solicitud Actualizada")
 
         # === DATOS PESADOS (solo si el expander está abierto) ===
@@ -512,8 +513,7 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
             st.session_state[expander_key] = {
                 'descripcion_procesada': None,
                 'comentarios_procesados': None,
-                'historial_pausas': None,
-                'archivos_cargados': False
+                'historial_pausas': None
             }
 
         datos_cache = st.session_state[expander_key]
@@ -591,35 +591,99 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                     key=f"pausas_{solicitud['id_solicitud']}"
                 )
 
-        # === ARCHIVOS ADJUNTOS (muy pesado - carga bajo demanda) ===
+        # === ARCHIVOS ADJUNTOS (super lazy loading) ===
         st.markdown("---")
-        with st.expander("📎 Archivos Adjuntos", expanded=False):
-            col_btn, col_status = st.columns([1, 2])
+        st.markdown("**📎 Archivos Adjuntos**")
 
-            with col_btn:
-                cargar_archivos = st.button(
-                    "🔄 Cargar Archivos",
-                    key=f"load_files_{solicitud['id_solicitud']}"
-                )
+        archivos_key = f"archivos_loaded_{solicitud['id_solicitud']}"
 
-            with col_status:
-                if datos_cache['archivos_cargados']:
-                    st.success("✅ Archivos cargados")
+        # Placeholder para archivos
+        archivos_placeholder = st.empty()
+
+        # Check si ya están cargados
+        if archivos_key in st.session_state:
+            archivos_adjuntos = st.session_state[archivos_key]
+
+            with archivos_placeholder.container():
+                if archivos_adjuntos:
+                    st.success(f"📁 {len(archivos_adjuntos)} archivo(s) encontrado(s)")
+
+                    for archivo in archivos_adjuntos:
+                        col1, col2, col3 = st.columns([3, 1, 1])
+
+                        with col1:
+                            tamaño_mb = archivo['size'] / (1024 * 1024)
+                            st.write(f"📄 **{archivo['name']}** ({tamaño_mb:.2f} MB)")
+
+                            # Mostrar fecha de creación del archivo si está disponible
+                            if archivo.get('created'):
+                                try:
+                                    from datetime import datetime
+                                    fecha_creacion = datetime.fromisoformat(archivo['created'].replace('Z', '+00:00'))
+                                    fecha_str = formatear_fecha_colombia(fecha_creacion)
+                                    st.caption(f"📅 Subido: {fecha_str}")
+                                except:
+                                    st.caption("📅 Fecha no disponible")
+
+                        with col2:
+                            if archivo.get('download_url'):
+                                st.markdown(f"[⬇️ Descargar]({archivo['download_url']})")
+                            else:
+                                st.info("🔗 Link no disponible")
+
+                        with col3:
+                            if archivo.get('web_url'):
+                                st.markdown(f"[👁️ Ver]({archivo['web_url']})")
+                            else:
+                                st.info("👁️ No disponible")
+
+                        # Línea separadora entre archivos
+                        if archivo != archivos_adjuntos[-1]:
+                            st.markdown("---")
+
+                    # Botón para refrescar archivos
+                    col1, col2, col3 = st.columns([1, 1, 2])
+                    with col1:
+                        if st.button("🔄 Actualizar", key=f"refresh_files_{solicitud['id_solicitud']}",
+                                     help="Recargar archivos"):
+                            del st.session_state[archivos_key]
+                            st.rerun()
                 else:
-                    st.info("👆 Haz clic para cargar archivos")
+                    st.info("📭 No hay archivos adjuntos para esta solicitud")
 
-            # Cargar archivos solo cuando se solicite
-            if cargar_archivos or datos_cache['archivos_cargados']:
-                if not datos_cache['archivos_cargados']:
-                    with st.spinner("Cargando archivos..."):
-                        archivos = mostrar_archivos_adjuntos_administrador_inline(gestor_datos,
-                                                                                  solicitud['id_solicitud'])
-                        datos_cache['archivos_cargados'] = True
-                        datos_cache['archivos_lista'] = archivos
-                else:
-                    # Mostrar archivos ya cargados
-                    archivos = datos_cache.get('archivos_lista', [])
-                    mostrar_lista_archivos_simple(archivos)
+                    # Botón para refrescar en caso de que no haya archivos
+                    col1, col2, col3 = st.columns([1, 1, 2])
+                    with col1:
+                        if st.button("🔄 Verificar de nuevo", key=f"recheck_files_{solicitud['id_solicitud']}",
+                                     help="Verificar si hay archivos nuevos"):
+                            del st.session_state[archivos_key]
+                            st.rerun()
+        else:
+            # Mostrar botón de carga bajo demanda
+            with archivos_placeholder.container():
+                col1, col2 = st.columns([1, 2])
+
+                with col1:
+                    cargar_archivos = st.button(
+                        "📁 Cargar archivos adjuntos",
+                        key=f"load_files_{solicitud['id_solicitud']}",
+                        help="Haz clic para cargar y ver archivos adjuntos"
+                    )
+
+                with col2:
+                    st.caption("👆 Los archivos se cargan solo cuando los necesites")
+
+                if cargar_archivos:
+                    with st.spinner("🔄 Cargando archivos adjuntos..."):
+                        try:
+                            archivos_adjuntos = gestor_datos.obtener_archivos_adjuntos_solicitud(
+                                solicitud['id_solicitud'])
+                            st.session_state[archivos_key] = archivos_adjuntos
+                            st.rerun()
+                        except Exception as e:
+                            st.session_state[archivos_key] = []
+                            st.error(f"❌ Error al cargar archivos: {str(e)}")
+                            print(f"Error cargando archivos para {solicitud['id_solicitud']}: {e}")
 
         st.markdown("---")
 
@@ -698,12 +762,16 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                 if expander_key in st.session_state:
                     del st.session_state[expander_key]
 
+                # Limpiar cache de archivos para que se recarguen con archivos nuevos
+                if archivos_key in st.session_state:
+                    del st.session_state[archivos_key]
+
                 procesar_actualizacion_sharepoint_simplificada(
                     gestor_datos, solicitud, nuevo_estado, nueva_prioridad,
                     responsable, email_responsable, nuevo_comentario,
                     notificar_solicitante, notificar_responsable, archivos_nuevos
                 )
-
+                
 def mostrar_archivos_adjuntos_administrador_inline(gestor_datos, id_solicitud):
     """Versión inline optimizada para cargar archivos"""
     try:
