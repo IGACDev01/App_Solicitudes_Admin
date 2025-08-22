@@ -317,52 +317,74 @@ def normalizar_datetime(dt):
     # Usar utilidad de zona horaria para consistencia
     return convertir_a_colombia(dt)
 
+
 def mostrar_mini_dashboard(df, proceso):
     """Mini dashboard del proceso"""
-    
+
     from timezone_utils_admin import obtener_fecha_actual_colombia
     st.subheader(f"📊 Dashboard - {proceso}")
-    
+
     # Métricas principales
     col1, col2, col3, col4, col5 = st.columns(5)
-    
+
     with col1:
         total = len(df)
         st.metric("📋 Total", total)
-    
+
     with col2:
         asignadas = len(df[df['estado'] == 'Asignada'])
         st.metric("🟡 Asignadas", asignadas)
-    
+
     with col3:
         en_proceso = len(df[df['estado'] == 'En Proceso'])
         st.metric("🔵 En Proceso", en_proceso)
-    
-    with col4:  
+
+    with col4:
         incompletas = len(df[df['estado'] == 'Incompleta'])
         st.metric("🟠 Incompletas", incompletas)
-    
+
     with col5:
         completadas = len(df[df['estado'] == 'Completada'])
         st.metric("✅ Completadas", completadas)
-    
-    # Alertas
+
+    # ENHANCED ALERTS SECTION
     if asignadas > 0:
         fecha_limite = obtener_fecha_actual_colombia() - timedelta(days=7)
-        
+
         # Normalizar columnas datetime para comparación
         df_normalizado = df.copy()
         if 'fecha_solicitud' in df_normalizado.columns:
             df_normalizado['fecha_solicitud'] = df_normalizado['fecha_solicitud'].apply(normalizar_datetime)
-            
+
             # Filtrar solicitudes pendientes antiguas
             antiguas = df_normalizado[
-                (df_normalizado['estado'] == 'Asignada') & 
+                (df_normalizado['estado'] == 'Asignada') &
                 (df_normalizado['fecha_solicitud'] < fecha_limite)
-            ]
-            
+                ]
+
             if not antiguas.empty:
-                st.warning(f"⚠️ {len(antiguas)} solicitudes Asignadas por más de 7 días")
+                ids_antiguas = ', '.join(antiguas['id_solicitud'].tolist())
+
+                # Create expandable alert for old assigned requests
+                with st.expander(f"⚠️ {len(antiguas)} solicitudes Asignadas por más de 7 días",
+                                 expanded=False):
+
+                    # Show as table for better readability
+                    if len(antiguas) > 0:
+                        antiguas_display = antiguas[['id_solicitud', 'nombre_solicitante', 'fecha_solicitud']].copy()
+                        antiguas_display['dias_transcurridos'] = (
+                                obtener_fecha_actual_colombia() - antiguas_display['fecha_solicitud']
+                        ).dt.days
+                        st.dataframe(
+                            antiguas_display,
+                            column_config={
+                                "id_solicitud": "ID Solicitud",
+                                "nombre_solicitante": "Solicitante",
+                                "fecha_solicitud": "Fecha Solicitud",
+                                "dias_transcurridos": "Días Transcurridos"
+                            },
+                            hide_index=True
+                        )
 
     if incompletas > 0:
         # Buscar incompletas por mucho tiempo
@@ -370,9 +392,9 @@ def mostrar_mini_dashboard(df, proceso):
         if not df_incompletas.empty and 'fecha_pausa' in df_incompletas.columns:
             from timezone_utils_admin import convertir_a_colombia, obtener_fecha_actual_colombia
             fecha_actual = obtener_fecha_actual_colombia()
-            
-            # Contar incompletas por más de 7 días
-            incompletas_antiguas = 0
+
+            # Encontrar incompletas por más de 7 días con sus IDs
+            incompletas_antiguas_data = []
             for _, row in df_incompletas.iterrows():
                 fecha_pausa = row.get('fecha_pausa')
                 if fecha_pausa and pd.notna(fecha_pausa):
@@ -380,10 +402,33 @@ def mostrar_mini_dashboard(df, proceso):
                     if fecha_pausa_colombia:
                         dias_pausada = (fecha_actual - fecha_pausa_colombia).days
                         if dias_pausada > 7:
-                            incompletas_antiguas += 1
-            
-            if incompletas_antiguas > 0:
-                st.warning(f"⏸️ {incompletas_antiguas} solicitudes incompletas por más de 7 días")
+                            incompletas_antiguas_data.append({
+                                'id_solicitud': row['id_solicitud'],
+                                'nombre_solicitante': row['nombre_solicitante'],
+                                'dias_pausada': dias_pausada,
+                                'fecha_pausa': fecha_pausa_colombia
+                            })
+
+            if incompletas_antiguas_data:
+                ids_incompletas = ', '.join([item['id_solicitud'] for item in incompletas_antiguas_data])
+
+                # Create expandable alert for old incomplete requests
+                with st.expander(
+                        f"⏸️ {len(incompletas_antiguas_data)} solicitudes incompletas por más de 7 días",
+                        expanded=False):
+                    # Show detailed table for incomplete requests
+                    if len(incompletas_antiguas_data) > 0:
+                        df_incompletas_display = pd.DataFrame(incompletas_antiguas_data)
+                        st.dataframe(
+                            df_incompletas_display,
+                            column_config={
+                                "id_solicitud": "ID Solicitud",
+                                "nombre_solicitante": "Solicitante",
+                                "dias_pausada": "Días Pausada",
+                                "fecha_pausa": "Fecha de Pausa"
+                            },
+                            hide_index=True
+                        )
     
     # Gráfico de estados
     if total > 0:
