@@ -67,19 +67,24 @@ def mantener_estado_expander_persistente(id_solicitud, forzar_abierto=False, acc
 
     return False
 
-def cache_archivos_persistente(id_solicitud, archivos=None):
-    """Cache persistente para archivos adjuntos"""
+def cache_archivos_persistente(id_solicitud, archivos=None, forzar_recarga=False):
+    """Cache persistente para archivos adjuntos con mejor manejo de estados"""
     inicializar_estados_persistentes()
 
     key = f"archivos_{id_solicitud}"
     timestamp_actual = time.time()
+
+    # Si se fuerza recarga, limpiar cache primero
+    if forzar_recarga and key in st.session_state.archivos_cache_persistente:
+        del st.session_state.archivos_cache_persistente[key]
 
     # Guardar archivos en cache
     if archivos is not None:
         st.session_state.archivos_cache_persistente[key] = {
             'archivos': archivos,
             'timestamp': timestamp_actual,
-            'cargado': True
+            'cargado': True,
+            'archivos_cargados_una_vez': True  # NUEVO: marca que ya se cargaron una vez
         }
         return archivos
 
@@ -90,9 +95,20 @@ def cache_archivos_persistente(id_solicitud, archivos=None):
         if tiempo_transcurrido < TIEMPO_PERSISTENCIA_ARCHIVOS:
             return cache['archivos']
         else:
-            # Limpiar cache expirado
+            # Limpiar cache expirado pero mantener la marca de "ya cargado"
+            archivos_ya_cargados = cache.get('archivos_cargados_una_vez', False)
             if key in st.session_state.archivos_cache_persistente:
                 del st.session_state.archivos_cache_persistente[key]
+
+            # Si ya se cargaron una vez, mantener el estado de "mostrar archivos"
+            if archivos_ya_cargados:
+                # Recargar automáticamente
+                try:
+                    from . import gestor_datos  # Esto necesita ser pasado como parámetro
+                    archivos_adjuntos = gestor_datos.obtener_archivos_adjuntos_solicitud(id_solicitud)
+                    return cache_archivos_persistente(id_solicitud, archivos_adjuntos)
+                except:
+                    return []
 
     return None
 
@@ -776,16 +792,32 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
 
         id_solicitud = solicitud['id_solicitud']
 
+        # Clave para trackear si ya se cargaron archivos una vez
+        archivos_ya_mostrados_key = f"archivos_ya_mostrados_{id_solicitud}"
+
         # Verificar cache persistente primero
         archivos_cached = cache_archivos_persistente(id_solicitud)
 
-        if archivos_cached is not None:
+        # Si hay archivos en cache O ya se mostraron antes, mostrar la interfaz de archivos
+        if archivos_cached is not None or st.session_state.get(archivos_ya_mostrados_key, False):
+
+            # Si no hay archivos en cache pero ya se mostraron antes, recargar
+            if archivos_cached is None and st.session_state.get(archivos_ya_mostrados_key, False):
+                try:
+                    archivos_cached = gestor_datos.obtener_archivos_adjuntos_solicitud(id_solicitud)
+                    cache_archivos_persistente(id_solicitud, archivos_cached)
+                except:
+                    archivos_cached = []
+
+            # Marcar que ya se mostraron archivos
+            st.session_state[archivos_ya_mostrados_key] = True
+
             # Mostrar archivos desde cache persistente
             if archivos_cached:
                 st.success(f"📁 {len(archivos_cached)} archivo(s) encontrado(s)")
 
                 for archivo in archivos_cached:
-                    col1, col2, col3 = st.columns([3, 1, 1])
+                    col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
 
                     with col1:
                         tamaño_mb = archivo['size'] / (1024 * 1024)
@@ -812,41 +844,53 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                         else:
                             st.info("👁️ No disponible")
 
+                    with col4:
+                        # Botón para borrar archivo
+                        if st.button("🗑️", key=f"delete_{id_solicitud}_{archivo['name']}",
+                                     help="Borrar archivo", use_container_width=True):
+                            if borrar_archivo_con_confirmacion(gestor_datos, id_solicitud, archivo['name']):
+                                # Limpiar cache para que se recargue automáticamente
+                                st.session_state.archivos_cache_persistente.pop(f"archivos_{id_solicitud}", None)
+                                mantener_estado_expander_persistente(id_solicitud, forzar_abierto=True,
+                                                                     accion='borrar_archivo')
+                                st.rerun()
+
                     if archivo != archivos_cached[-1]:
                         st.markdown("---")
 
-                # Botón para refrescar archivos
-                col1, col2, col3 = st.columns([1, 1, 2])
+                # Solo botón de actualizar
+                col1, col2, col3 = st.columns([1, 2, 1])
                 with col1:
-                    if st.button("🔄 Actualizar", key=f"refresh_files_{id_solicitud}"):
-                        # Limpiar cache y mantener expander abierto
+                    if st.button("🔄 Actualizar", key=f"refresh_files_{id_solicitud}",
+                                 help="Recargar lista de archivos"):
                         st.session_state.archivos_cache_persistente.pop(f"archivos_{id_solicitud}", None)
-                        mantener_estado_expander_persistente(id_solicitud, forzar_abierto=True, accion='refresh_archivos')
+                        mantener_estado_expander_persistente(id_solicitud, forzar_abierto=True,
+                                                             accion='refresh_archivos')
                         st.rerun()
             else:
                 st.info("🔭 No hay archivos adjuntos para esta solicitud")
 
-                col1, col2, col3 = st.columns([1, 1, 2])
+                # Solo botón de verificar de nuevo
+                col1, col2, col3 = st.columns([1, 2, 1])
                 with col1:
-                    if st.button("🔄 Verificar de nuevo", key=f"recheck_files_{id_solicitud}"):
-                        # Limpiar cache y mantener expander abierto
+                    if st.button("🔄 Verificar", key=f"recheck_files_{id_solicitud}",
+                                 help="Verificar si hay nuevos archivos"):
                         st.session_state.archivos_cache_persistente.pop(f"archivos_{id_solicitud}", None)
-                        mantener_estado_expander_persistente(id_solicitud, forzar_abierto=True, accion='recheck_archivos')
+                        mantener_estado_expander_persistente(id_solicitud, forzar_abierto=True,
+                                                             accion='recheck_archivos')
                         st.rerun()
 
         else:
-            # No hay cache, mostrar botón para cargar
+            # Mostrar botón para cargar inicial
             loading_key = f"loading_archivos_{id_solicitud}"
 
             if st.session_state.get(loading_key, False):
                 st.info("🔄 Cargando archivos adjuntos...")
 
-                # Cargar archivos y guardar en cache persistente
                 try:
                     archivos_adjuntos = gestor_datos.obtener_archivos_adjuntos_solicitud(id_solicitud)
-                    # Guardar en cache persistente
                     cache_archivos_persistente(id_solicitud, archivos_adjuntos)
-                    # Mantener expander abierto
+                    st.session_state[archivos_ya_mostrados_key] = True
                     mantener_estado_expander_persistente(id_solicitud, forzar_abierto=True, accion='cargar_archivos')
                     st.session_state[loading_key] = False
                     st.rerun()
@@ -861,15 +905,14 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                     cargar_archivos = st.button(
                         "📁 Cargar archivos adjuntos",
                         key=f"load_files_{id_solicitud}",
-                        help="Haz clic para cargar y ver archivos adjuntos"
+                        help="Ver archivos adjuntos de esta solicitud"
                     )
 
                 with col2:
-                    st.caption("👆 Los archivos se cargan solo cuando los necesites")
+                    st.caption("👆 Haz clic para ver los archivos adjuntos")
 
                 if cargar_archivos:
                     st.session_state[loading_key] = True
-                    # Mantener expander abierto durante la carga
                     mantener_estado_expander_persistente(id_solicitud, forzar_abierto=True, accion='iniciar_carga')
                     st.rerun()
 
@@ -960,6 +1003,45 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                     responsable, email_responsable, nuevo_comentario,
                     notificar_solicitante, notificar_responsable, archivos_nuevos
                 )
+
+
+def borrar_archivo_con_confirmacion(gestor_datos, id_solicitud: str, nombre_archivo: str) -> bool:
+    """Borrar archivo con manejo de errores y confirmación visual"""
+    try:
+        # Mostrar confirmación visual
+        with st.spinner(f"🗑️ Borrando {nombre_archivo}..."):
+            exito = gestor_datos.borrar_archivo_adjunto_solicitud(id_solicitud, nombre_archivo)
+
+            if exito:
+                st.success(f"✅ Archivo '{nombre_archivo}' borrado exitosamente")
+
+                # Agregar comentario automático en la solicitud
+                solicitud_actual = gestor_datos.obtener_solicitud_por_id(id_solicitud)
+                if not solicitud_actual.empty:
+                    comentarios_actuales = solicitud_actual.iloc[0].get('comentarios_admin', '')
+                    usuario_admin = st.session_state.get('usuario_admin', 'Admin')
+
+                    comentario_borrado = f"Archivo '{nombre_archivo}' fue eliminado por el administrador"
+                    comentarios_finales = agregar_comentario_administrador(
+                        comentarios_actuales, comentario_borrado, f"{usuario_admin} (Sistema)"
+                    )
+
+                    # Actualizar comentarios en SharePoint
+                    gestor_datos.actualizar_estado_solicitud(
+                        id_solicitud,
+                        solicitud_actual.iloc[0]['estado'],
+                        solicitud_actual.iloc[0].get('responsable_asignado', ''),
+                        comentarios_finales
+                    )
+
+                return True
+            else:
+                st.error(f"❌ Error al borrar archivo '{nombre_archivo}'")
+                return False
+
+    except Exception as e:
+        st.error(f"❌ Error inesperado al borrar archivo: {str(e)}")
+        return False
 
 def preservar_estado_expander(id_solicitud, accion_realizada=None):
     """Preservar el estado del expander después de acciones"""

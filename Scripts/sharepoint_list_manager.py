@@ -1031,3 +1031,35 @@ class GestorListasSharePoint:
         except Exception as e:
             print(f"Error reanudando solicitud: {e}")
             return False
+
+    def borrar_archivo_adjunto_solicitud(self, id_solicitud: str, nombre_archivo: str) -> bool:
+        """Borrar un archivo adjunto específico de una solicitud"""
+        try:
+            headers = self._obtener_headers()
+            if not headers.get('Authorization'):
+                print("❌ No hay token de autorización")
+                return False
+
+            if not self.id_drive_destino:
+                print("❌ No hay drive destino disponible")
+                return False
+
+            # Construir ruta del archivo
+            ruta_archivo = f"Archivos Adjuntos/{id_solicitud}/{nombre_archivo}"
+            url_borrar = f"{self.configuracion_graph['graph_url']}/drives/{self.id_drive_destino}/root:/{ruta_archivo}"
+
+            response = requests.delete(url_borrar, headers=headers)
+
+            if response.status_code in [200, 204]:
+                print(f"✅ Archivo borrado: {nombre_archivo} de {id_solicitud}")
+                return True
+            elif response.status_code == 404:
+                print(f"⚠️ Archivo no encontrado: {nombre_archivo}")
+                return False
+            else:
+                print(f"❌ Error al borrar archivo: {response.status_code}")
+                return False
+
+        except Exception as e:
+            print(f"❌ Error borrando archivo adjunto: {e}")
+            return False
