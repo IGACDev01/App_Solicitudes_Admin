@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import timedelta
-from utils import invalidar_y_actualizar_cache
+from utils import (invalidar_y_actualizar_cache, calcular_tiempo_pausa_en_tiempo_real, aplicar_tiempos_pausa_tiempo_real_dataframe, calcular_incompletas_con_tiempo_real)
 from timezone_utils_admin import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
 
 
@@ -330,7 +330,7 @@ def mostrar_visualizador_dataframe(gestor_datos):
         df_mostrar = df_filtrado
 
     # Formatear fechas para mejor visualización
-    df_mostrar_formateado = df_mostrar.copy()
+    df_mostrar_formateado = aplicar_tiempos_pausa_tiempo_real_dataframe(df_mostrar)
     
     # Manejar columnas datetime de manera segura
     for col in df_mostrar_formateado.columns:
@@ -360,7 +360,6 @@ def mostrar_visualizador_dataframe(gestor_datos):
 
     # Mostrar contador de resultados filtrados
     st.info(f"📊 Mostrando {len(df_filtrado)} de {len(df)} solicitudes")
-
 
 def mostrar_alertas_sistema(gestor_datos):
     """Mostrar alertas del sistema mejoradas - adaptadas del panel admin"""
@@ -419,21 +418,7 @@ def mostrar_alertas_sistema(gestor_datos):
             fecha_actual = obtener_fecha_actual_colombia()
 
             # Encontrar incompletas por más de 7 días
-            incompletas_antiguas_data = []
-            for _, row in df_incompletas.iterrows():
-                fecha_pausa = row.get('fecha_pausa')
-                if fecha_pausa and pd.notna(fecha_pausa):
-                    fecha_pausa_colombia = convertir_a_colombia(fecha_pausa)
-                    if fecha_pausa_colombia:
-                        dias_pausada = (fecha_actual - fecha_pausa_colombia).days
-                        if dias_pausada > 7:
-                            incompletas_antiguas_data.append({
-                                'id_solicitud': row['id_solicitud'],
-                                'nombre_solicitante': row['nombre_solicitante'],
-                                'proceso': row.get('proceso', 'N/A'),
-                                'dias_pausada': dias_pausada,
-                                'fecha_pausa': fecha_pausa_colombia
-                            })
+            incompletas_antiguas_data = calcular_incompletas_con_tiempo_real(df_incompletas)
 
             if incompletas_antiguas_data:
                 with st.expander(f"⏸️ {len(incompletas_antiguas_data)} solicitudes incompletas por más de 7 días",
@@ -513,7 +498,7 @@ def mostrar_metricas_principales(gestor_datos):
     # Tiempos medianos
     tiempo_respuesta_mediano = df[df['tiempo_respuesta_dias'] > 0]['tiempo_respuesta_dias'].median()
     tiempo_resolucion_mediano = df[df['estado'] == 'Completada']['tiempo_resolucion_dias'].median()
-    tiempo_pausa_mediano = df[df['tiempo_pausado_dias'] > 0]['tiempo_pausado_dias'].median()
+    tiempo_pausa_mediano = calcular_tiempo_pausa_en_tiempo_real(df)
     
     # Tasa de resolución
     tasa_resolucion = (completadas / total * 100) if total > 0 else 0
@@ -575,7 +560,7 @@ def mostrar_metricas_principales(gestor_datos):
     with col3:
         st.metric("🐌 Proceso Más Lento", proceso_mas_lento,
                    help="Proceso con mayor tiempo mediano de resolución")
-    
+
 def mostrar_grafico_estados(resumen):
     """Mostrar gráfico de distribución por estados"""
     

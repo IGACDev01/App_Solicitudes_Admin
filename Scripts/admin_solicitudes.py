@@ -3,7 +3,7 @@ import pandas as pd
 from email_manager import GestorNotificacionesEmail
 import plotly.graph_objects as go
 from timezone_utils_admin import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
-from utils import invalidar_y_actualizar_cache
+from utils import (invalidar_y_actualizar_cache, calcular_incompletas_con_tiempo_real, calcular_tiempo_pausa_solicitud_individual)
 import time
 from datetime import datetime, timedelta
 import io
@@ -424,20 +424,7 @@ def mostrar_mini_dashboard(df, proceso):
             fecha_actual = obtener_fecha_actual_colombia()
 
             # Encontrar incompletas por más de 7 días con sus IDs
-            incompletas_antiguas_data = []
-            for _, row in df_incompletas.iterrows():
-                fecha_pausa = row.get('fecha_pausa')
-                if fecha_pausa and pd.notna(fecha_pausa):
-                    fecha_pausa_colombia = convertir_a_colombia(fecha_pausa)
-                    if fecha_pausa_colombia:
-                        dias_pausada = (fecha_actual - fecha_pausa_colombia).days
-                        if dias_pausada > 7:
-                            incompletas_antiguas_data.append({
-                                'id_solicitud': row['id_solicitud'],
-                                'nombre_solicitante': row['nombre_solicitante'],
-                                'dias_pausada': dias_pausada,
-                                'fecha_pausa': fecha_pausa_colombia
-                            })
+            incompletas_antiguas_data = calcular_incompletas_con_tiempo_real(df)
 
             if incompletas_antiguas_data:
                 ids_incompletas = ', '.join([item['id_solicitud'] for item in incompletas_antiguas_data])
@@ -730,6 +717,14 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                 fecha_str = formatear_fecha_colombia(solicitud['fecha_solicitud'])
                 st.write(f"**Fecha:** {fecha_str}")
 
+            # Real-time pause time display
+            if solicitud['estado'] == 'Incompleta':
+                tiempo_pausa_real = calcular_tiempo_pausa_solicitud_individual(solicitud)
+                if tiempo_pausa_real > 0:
+                    st.write(f"**⏸️ Tiempo Pausado:** {tiempo_pausa_real:.1f} días")
+                    if tiempo_pausa_real > 7:
+                        st.warning(f"⚠️ Pausada por más de 7 días")
+
         with col2:
             st.write("**📝 Descripción**")
 
@@ -1003,7 +998,6 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                     responsable, email_responsable, nuevo_comentario,
                     notificar_solicitante, notificar_responsable, archivos_nuevos
                 )
-
 
 def borrar_archivo_con_confirmacion(gestor_datos, id_solicitud: str, nombre_archivo: str) -> bool:
     """Borrar archivo con manejo de errores y confirmación visual"""
@@ -1353,7 +1347,6 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
     except Exception as e:
         st.error(f"❌ Error al procesar actualización: {str(e)}")
         return False
-
 
 def exportar_solicitudes_a_excel(df, proceso_admin):
     """Exportar solicitudes - versión ultra-simple y robusta"""
