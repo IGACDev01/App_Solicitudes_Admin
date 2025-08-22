@@ -6,6 +6,8 @@ from timezone_utils_admin import obtener_fecha_actual_colombia, convertir_a_colo
 from utils import invalidar_y_actualizar_cache
 import time
 from datetime import datetime, timedelta
+import io
+import xlsxwriter
 
 # Credenciales por proceso
 CREDENCIALES_ADMINISTRADORES = {
@@ -25,14 +27,6 @@ CREDENCIALES_ADMINISTRADORES = {
 # Configuración de persistencia
 TIEMPO_PERSISTENCIA_EXPANDER = 300  # 5 minutos en segundos
 TIEMPO_PERSISTENCIA_ARCHIVOS = 600  # 10 minutos en segundos
-
-import time
-from datetime import datetime, timedelta
-
-# Configuración de persistencia
-TIEMPO_PERSISTENCIA_EXPANDER = 300  # 5 minutos en segundos
-TIEMPO_PERSISTENCIA_ARCHIVOS = 600  # 10 minutos en segundos
-
 
 def inicializar_estados_persistentes():
     """Inicializar estados persistentes al cargar la aplicación"""
@@ -207,23 +201,8 @@ def mostrar_tab_administrador(gestor_datos):
     proceso_admin = st.session_state.get('proceso_admin', '')
 
     # Header
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        st.header(f"⚙️ Panel de Administración - {proceso_admin}")
-    with col2:
-        if st.button("🔄 Actualizar Datos", key="actualizar_admin"):
-            invalidar_y_actualizar_cache()
-            st.cache_resource.clear()
-            st.rerun()
-    with col3:
-        if st.button("🚪 Cerrar Sesión", key="cerrar_sesion_admin"):
-            st.session_state.admin_autenticado = False
-            st.session_state.proceso_admin = None
-            st.session_state.usuario_admin = None
-            st.rerun()
 
-    # Auto-actualizar datos
-    gestor_datos.cargar_datos()
+    st.header(f"⚙️ Panel de Administración - {proceso_admin}")
 
     # Indicador de estado de SharePoint
     estado = gestor_datos.obtener_estado_sharepoint()
@@ -235,6 +214,42 @@ def mostrar_tab_administrador(gestor_datos):
     else:
         st.error("❌ Error de conexión SharePoint")
         return
+
+    st.markdown("---")
+
+    # Botones de funcinalidades
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col1:
+
+        if st.button("🔄 Actualizar Datos", key="actualizar_admin"):
+            invalidar_y_actualizar_cache()
+            st.cache_resource.clear()
+            st.rerun()
+    with col2:
+        # Botón de exportación a Excel
+        df_proceso = obtener_solicitudes_del_proceso(gestor_datos, proceso_admin)
+        if not df_proceso.empty:
+            datos_excel = exportar_solicitudes_a_excel(df_proceso, proceso_admin)
+            if datos_excel:
+                fecha_actual = obtener_fecha_actual_colombia().strftime('%Y%m%d_%H%M')
+                nombre_archivo = f"Solicitudes_{proceso_admin.replace(' ', '_')}_{fecha_actual}.xlsx"
+
+                st.download_button(
+                    label="📊 Exportar Excel",
+                    data=datos_excel,
+                    file_name=nombre_archivo,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    help="Descargar todas las solicitudes del proceso en formato Excel"
+                )
+        else:
+            st.button("📊 Sin datos", disabled=True, help="No hay solicitudes para exportar")
+
+    with col3:
+        if st.button("🚪 Cerrar Sesión", key="cerrar_sesion_admin"):
+            st.session_state.admin_autenticado = False
+            st.session_state.proceso_admin = None
+            st.session_state.usuario_admin = None
+            st.rerun()
 
     st.markdown("---")
 
@@ -316,7 +331,6 @@ def normalizar_datetime(dt):
     
     # Usar utilidad de zona horaria para consistencia
     return convertir_a_colombia(dt)
-
 
 def mostrar_mini_dashboard(df, proceso):
     """Mini dashboard del proceso"""
@@ -884,7 +898,7 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                 )
 
                 responsable = st.text_input(
-                    "Responsable:",
+                    "Responsable adicional:",
                     value=solicitud.get('responsable_asignado', ''),
                     key=f"responsable_{solicitud['id_solicitud']}"
                 )
@@ -898,7 +912,7 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                 )
 
                 email_responsable = st.text_input(
-                    "Email responsable:",
+                    "Email responsable adicional:",
                     placeholder="responsable@igac.gov.co",
                     key=f"email_resp_{solicitud['id_solicitud']}"
                 )
@@ -1056,7 +1070,6 @@ def mostrar_archivos_adjuntos_administrador(gestor_datos, id_solicitud):
     except Exception as e:
         st.warning("⚠️ Error al cargar archivos adjuntos")
         print(f"Error cargando archivos adjuntos para admin: {e}")
-
 
 def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuevo_estado, nueva_prioridad,
                                                    responsable, email_responsable, nuevo_comentario,
@@ -1258,3 +1271,84 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
     except Exception as e:
         st.error(f"❌ Error al procesar actualización: {str(e)}")
         return False
+
+
+def exportar_solicitudes_a_excel(df, proceso_admin):
+    """Exportar solicitudes - versión ultra-simple y robusta"""
+    try:
+        # Crear buffer en memoria
+        output = io.BytesIO()
+
+        # Preparar datos para exportación
+        df_export = df.copy()
+
+        # Convertir TODAS las columnas problemáticas a string para evitar errores
+        columnas_fecha = ['fecha_solicitud', 'fecha_actualizacion', 'fecha_completado', 'fecha_pausa']
+        for col in columnas_fecha:
+            if col in df_export.columns:
+                def convertir_fecha_string(x):
+                    if pd.isna(x) or x is None or str(x) == 'NaT':
+                        return "No disponible"
+
+                    try:
+                        fecha_colombia = convertir_a_colombia(x)
+                        if fecha_colombia and not pd.isna(fecha_colombia):
+                            return fecha_colombia.strftime('%d/%m/%Y %H:%M')
+                        else:
+                            return "No disponible"
+                    except:
+                        return "No disponible"
+
+                df_export[col] = df_export[col].apply(convertir_fecha_string)
+
+        # Limpiar comentarios HTML
+        if 'comentarios_admin' in df_export.columns:
+            df_export['comentarios_admin'] = df_export['comentarios_admin'].apply(
+                lambda x: limpiar_contenido_html(x) if pd.notna(x) else ""
+            )
+
+        if 'descripcion' in df_export.columns:
+            df_export['descripcion'] = df_export['descripcion'].apply(
+                lambda x: limpiar_contenido_html(x) if pd.notna(x) else ""
+            )
+
+        # Reemplazar todos los NaN con cadenas vacías
+        df_export = df_export.fillna("")
+
+        # Renombrar columnas
+        columnas_export = {
+            'id_solicitud': 'ID Solicitud',
+            'territorial': 'Territorial',
+            'nombre_solicitante': 'Solicitante',
+            'email_solicitante': 'Email',
+            'fecha_solicitud': 'Fecha Solicitud',
+            'tipo_solicitud': 'Tipo',
+            'area': 'Área',
+            'proceso': 'Proceso',
+            'estado': 'Estado',
+            'prioridad': 'Prioridad',
+            'responsable_asignado': 'Responsable',
+            'descripcion': 'Descripción',
+            'comentarios_admin': 'Comentarios Admin',
+            'fecha_actualizacion': 'Última Actualización',
+            'fecha_completado': 'Fecha Completado',
+            'tiempo_respuesta_dias': 'Tiempo Respuesta (días)',
+            'tiempo_resolucion_dias': 'Tiempo Resolución (días)',
+            'tiempo_pausado_dias': 'Tiempo Pausado (días)'
+        }
+
+        # Filtrar y renombrar columnas
+        columnas_disponibles = {k: v for k, v in columnas_export.items() if k in df_export.columns}
+        df_export = df_export[list(columnas_disponibles.keys())]
+        df_export.columns = list(columnas_disponibles.values())
+
+        # Exportar directamente con pandas (más simple)
+        df_export.to_excel(output, sheet_name='Solicitudes', index=False, engine='xlsxwriter')
+
+        output.seek(0)
+        return output.getvalue()
+
+    except Exception as e:
+        st.error(f"Error al generar Excel: {e}")
+        print(f"Error detallado: {e}")
+        return None

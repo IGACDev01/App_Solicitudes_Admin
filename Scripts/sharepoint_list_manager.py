@@ -325,9 +325,10 @@ class GestorListasSharePoint:
             print("⚠️ Drive destino no encontrado, las subidas de archivos pueden fallar")
         
         print(f"Conectado a lista SharePoint: {self.nombre_lista}")
-        
-        # Cargar datos iniciales
-        self.cargar_datos()
+
+        # Cargar data frame vacio para ser llenado bajo demanda
+        self.df = self.crear_dataframe_vacio()
+        print(f"Conectado a lista SharePoint: {self.nombre_lista} (datos cargados bajo demanda)")
     
     def _normalizar_datetime(self, dt) -> Optional[datetime]:
         """Normalizar datetime a timezone-naive para manejo consistente"""

@@ -73,7 +73,8 @@ def invalidar_cache_datos():
 def obtener_datos_sharepoint_en_cache(cache_key: str = "default"):
     """Obtener datos SharePoint con caché"""
     gestor_datos = obtener_gestor_datos()
-    gestor_datos.cargar_datos()
+    if gestor_datos.df is None or gestor_datos.df.empty:
+        gestor_datos.cargar_datos()
     return gestor_datos.df.copy() if gestor_datos.df is not None else pd.DataFrame()
 
 @st.cache_resource
