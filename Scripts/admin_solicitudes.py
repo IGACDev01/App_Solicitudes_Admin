@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
 from email_manager import GestorNotificacionesEmail
 import plotly.graph_objects as go
 from timezone_utils_admin import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
 from utils import invalidar_y_actualizar_cache
+import time
+from datetime import datetime, timedelta
 
 # Credenciales por proceso
 CREDENCIALES_ADMINISTRADORES = {
@@ -20,6 +21,111 @@ CREDENCIALES_ADMINISTRADORES = {
     "Tiquetes": {"usuario": "admin_tiquetes", "password": "Tiquetes9845$"},
     "Transporte": {"usuario": "admin_transporte", "password": "Transporte5926*"}
 }
+
+# Configuración de persistencia
+TIEMPO_PERSISTENCIA_EXPANDER = 300  # 5 minutos en segundos
+TIEMPO_PERSISTENCIA_ARCHIVOS = 600  # 10 minutos en segundos
+
+import time
+from datetime import datetime, timedelta
+
+# Configuración de persistencia
+TIEMPO_PERSISTENCIA_EXPANDER = 300  # 5 minutos en segundos
+TIEMPO_PERSISTENCIA_ARCHIVOS = 600  # 10 minutos en segundos
+
+
+def inicializar_estados_persistentes():
+    """Inicializar estados persistentes al cargar la aplicación"""
+    if 'estados_persistentes_inicializados' not in st.session_state:
+        st.session_state.estados_persistentes_inicializados = True
+        st.session_state.expanders_persistentes = {}
+        st.session_state.archivos_cache_persistente = {}
+        st.session_state.timestamp_inicializacion = time.time()
+
+def mantener_estado_expander_persistente(id_solicitud, forzar_abierto=False, accion=None):
+    """Mantener estado del expander de forma persistente"""
+    inicializar_estados_persistentes()
+
+    key = f"expander_{id_solicitud}"
+    timestamp_actual = time.time()
+
+    # Si se fuerza abrir o hay una acción específica
+    if forzar_abierto or accion:
+        st.session_state.expanders_persistentes[key] = {
+            'expandido': True,
+            'timestamp': timestamp_actual,
+            'accion': accion or 'manual',
+            'persistente': True
+        }
+        return True
+
+    # Verificar estado existente
+    estado = st.session_state.expanders_persistentes.get(key)
+    if estado and estado.get('persistente'):
+        # Verificar si no ha expirado
+        tiempo_transcurrido = timestamp_actual - estado['timestamp']
+        if tiempo_transcurrido < TIEMPO_PERSISTENCIA_EXPANDER:
+            return estado['expandido']
+        else:
+            # Limpiar estado expirado
+            if key in st.session_state.expanders_persistentes:
+                del st.session_state.expanders_persistentes[key]
+
+    return False
+
+def cache_archivos_persistente(id_solicitud, archivos=None):
+    """Cache persistente para archivos adjuntos"""
+    inicializar_estados_persistentes()
+
+    key = f"archivos_{id_solicitud}"
+    timestamp_actual = time.time()
+
+    # Guardar archivos en cache
+    if archivos is not None:
+        st.session_state.archivos_cache_persistente[key] = {
+            'archivos': archivos,
+            'timestamp': timestamp_actual,
+            'cargado': True
+        }
+        return archivos
+
+    # Recuperar del cache
+    cache = st.session_state.archivos_cache_persistente.get(key)
+    if cache:
+        tiempo_transcurrido = timestamp_actual - cache['timestamp']
+        if tiempo_transcurrido < TIEMPO_PERSISTENCIA_ARCHIVOS:
+            return cache['archivos']
+        else:
+            # Limpiar cache expirado
+            if key in st.session_state.archivos_cache_persistente:
+                del st.session_state.archivos_cache_persistente[key]
+
+    return None
+
+def limpiar_estados_expirados():
+    """Limpiar estados expirados periódicamente"""
+    if not hasattr(st.session_state, 'expanders_persistentes'):
+        return
+
+    timestamp_actual = time.time()
+
+    # Limpiar expanders expirados
+    keys_expirados = []
+    for key, estado in st.session_state.expanders_persistentes.items():
+        if timestamp_actual - estado['timestamp'] > TIEMPO_PERSISTENCIA_EXPANDER:
+            keys_expirados.append(key)
+
+    for key in keys_expirados:
+        del st.session_state.expanders_persistentes[key]
+
+    # Limpiar cache de archivos expirado
+    keys_cache_expirados = []
+    for key, cache in st.session_state.archivos_cache_persistente.items():
+        if timestamp_actual - cache['timestamp'] > TIEMPO_PERSISTENCIA_ARCHIVOS:
+            keys_cache_expirados.append(key)
+
+    for key in keys_cache_expirados:
+        del st.session_state.archivos_cache_persistente[key]
 
 def agregar_comentario_administrador(comentario_actual, nuevo_comentario, responsable):
     """Agregar un nuevo comentario administrativo con timestamp y autor"""
@@ -85,6 +191,12 @@ def formatear_comentarios_administrador_para_mostrar(comentarios):
 
 def mostrar_tab_administrador(gestor_datos):
     """Tab principal de administración - optimizado para SharePoint"""
+
+    # Inicializar estados persistentes
+    inicializar_estados_persistentes()
+
+    # Limpiar estados expirados cada vez
+    limpiar_estados_expirados()
 
     # Verificar autenticación
     if not st.session_state.get('admin_autenticado', False):
@@ -415,7 +527,7 @@ def mostrar_paginacion():
                 st.session_state.pagina_actual = max(1, pagina_actual - 1)
                 st.rerun()
 
-        # AQUÍ VA EL REEMPLAZO - Números de página como botones
+        # Números de página como botones
         with cols[2]:
             # Mostrar páginas como botones (máximo 5 páginas visibles)
             paginas_a_mostrar = []
@@ -471,10 +583,9 @@ def mostrar_lista_solicitudes_administrador_mejorada(gestor_datos, df, proceso):
     # Paginación al final
     mostrar_paginacion()
 
-
 def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
     """Versión con super lazy loading - archivos solo se cargan al hacer clic"""
-    from timezone_utils_admin import convertir_a_colombia, obtener_fecha_actual_colombia
+    from timezone_utils_admin import obtener_fecha_actual_colombia
 
     # === DATOS LIGEROS (siempre se cargan) ===
     estado = solicitud['estado']
@@ -499,26 +610,33 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
         diferencia_tiempo = obtener_fecha_actual_colombia() - actualizado_recientemente['timestamp']
         expandido_por_actualizacion = diferencia_tiempo.total_seconds() < 30
 
-    # === EXPANDER SIMPLE ===
-    with st.expander(titulo, expanded=expandido_por_actualizacion):
+    # === EXPANDER PERSISTENTE ===
+    # Verificar estados de persistencia
+    expandido_por_persistencia = mantener_estado_expander_persistente(solicitud['id_solicitud'])
+    expandido_final = expandido_por_actualizacion or expandido_por_persistencia
+
+    # Crear expander persistente
+    with st.expander(titulo, expanded=expandido_final):
+        # Marcar como abierto manualmente si se expande
+        if expandido_final and not expandido_por_actualizacion:
+            mantener_estado_expander_persistente(solicitud['id_solicitud'], forzar_abierto=True, accion='manual')
 
         # Mensaje de éxito si fue actualizado
         if actualizado_recientemente and expandido_por_actualizacion:
             st.success("✅ Solicitud Actualizada")
 
         # === DATOS PESADOS (solo si el expander está abierto) ===
-        # Detectar si el expander está realmente expandido
-        expander_key = f"expander_data_loaded_{solicitud['id_solicitud']}"
+        expander_data_key = f"expander_data_loaded_{solicitud['id_solicitud']}"
 
-        # Cargar datos pesados solo una vez por sesión o cuando se fuerze
-        if expander_key not in st.session_state:
-            st.session_state[expander_key] = {
+        # Cargar datos pesados solo una vez por sesión
+        if expander_data_key not in st.session_state:
+            st.session_state[expander_data_key] = {
                 'descripcion_procesada': None,
                 'comentarios_procesados': None,
                 'historial_pausas': None
             }
 
-        datos_cache = st.session_state[expander_key]
+        datos_cache = st.session_state[expander_data_key]
 
         # === INFORMACIÓN BÁSICA (ligera) ===
         col1, col2 = st.columns(2)
@@ -593,82 +711,97 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                     key=f"pausas_{solicitud['id_solicitud']}"
                 )
 
-        # === ARCHIVOS ADJUNTOS (super lazy loading) ===
+        # === ARCHIVOS ADJUNTOS PERSISTENTES ===
         st.markdown("---")
         st.markdown("**📎 Archivos Adjuntos**")
 
-        archivos_key = f"archivos_loaded_{solicitud['id_solicitud']}"
+        id_solicitud = solicitud['id_solicitud']
 
-        # Placeholder para archivos
-        archivos_placeholder = st.empty()
+        # Verificar cache persistente primero
+        archivos_cached = cache_archivos_persistente(id_solicitud)
 
-        # Check si ya están cargados
-        if archivos_key in st.session_state:
-            archivos_adjuntos = st.session_state[archivos_key]
+        if archivos_cached is not None:
+            # Mostrar archivos desde cache persistente
+            if archivos_cached:
+                st.success(f"📁 {len(archivos_cached)} archivo(s) encontrado(s)")
 
-            with archivos_placeholder.container():
-                if archivos_adjuntos:
-                    st.success(f"📁 {len(archivos_adjuntos)} archivo(s) encontrado(s)")
+                for archivo in archivos_cached:
+                    col1, col2, col3 = st.columns([3, 1, 1])
 
-                    for archivo in archivos_adjuntos:
-                        col1, col2, col3 = st.columns([3, 1, 1])
-
-                        with col1:
-                            tamaño_mb = archivo['size'] / (1024 * 1024)
-                            st.write(f"📄 **{archivo['name']}** ({tamaño_mb:.2f} MB)")
-
-                            # Mostrar fecha de creación del archivo si está disponible
-                            if archivo.get('created'):
-                                try:
-                                    from datetime import datetime
-                                    fecha_creacion = datetime.fromisoformat(archivo['created'].replace('Z', '+00:00'))
-                                    fecha_str = formatear_fecha_colombia(fecha_creacion)
-                                    st.caption(f"📅 Subido: {fecha_str}")
-                                except:
-                                    st.caption("📅 Fecha no disponible")
-
-                        with col2:
-                            if archivo.get('download_url'):
-                                st.markdown(f"[⬇️ Descargar]({archivo['download_url']})")
-                            else:
-                                st.info("🔗 Link no disponible")
-
-                        with col3:
-                            if archivo.get('web_url'):
-                                st.markdown(f"[👁️ Ver]({archivo['web_url']})")
-                            else:
-                                st.info("👁️ No disponible")
-
-                        # Línea separadora entre archivos
-                        if archivo != archivos_adjuntos[-1]:
-                            st.markdown("---")
-
-                    # Botón para refrescar archivos
-                    col1, col2, col3 = st.columns([1, 1, 2])
                     with col1:
-                        if st.button("🔄 Actualizar", key=f"refresh_files_{solicitud['id_solicitud']}",
-                                     help="Recargar archivos"):
-                            del st.session_state[archivos_key]
-                            st.rerun()
-                else:
-                    st.info("📭 No hay archivos adjuntos para esta solicitud")
+                        tamaño_mb = archivo['size'] / (1024 * 1024)
+                        st.write(f"📄 **{archivo['name']}** ({tamaño_mb:.2f} MB)")
 
-                    # Botón para refrescar en caso de que no haya archivos
-                    col1, col2, col3 = st.columns([1, 1, 2])
-                    with col1:
-                        if st.button("🔄 Verificar de nuevo", key=f"recheck_files_{solicitud['id_solicitud']}",
-                                     help="Verificar si hay archivos nuevos"):
-                            del st.session_state[archivos_key]
-                            st.rerun()
+                        if archivo.get('created'):
+                            try:
+                                from datetime import datetime
+                                fecha_creacion = datetime.fromisoformat(archivo['created'].replace('Z', '+00:00'))
+                                fecha_str = formatear_fecha_colombia(fecha_creacion)
+                                st.caption(f"📅 Subido: {fecha_str}")
+                            except:
+                                st.caption("📅 Fecha no disponible")
+
+                    with col2:
+                        if archivo.get('download_url'):
+                            st.markdown(f"[⬇️ Descargar]({archivo['download_url']})")
+                        else:
+                            st.info("🔗 Link no disponible")
+
+                    with col3:
+                        if archivo.get('web_url'):
+                            st.markdown(f"[👁️ Ver]({archivo['web_url']})")
+                        else:
+                            st.info("👁️ No disponible")
+
+                    if archivo != archivos_cached[-1]:
+                        st.markdown("---")
+
+                # Botón para refrescar archivos
+                col1, col2, col3 = st.columns([1, 1, 2])
+                with col1:
+                    if st.button("🔄 Actualizar", key=f"refresh_files_{id_solicitud}"):
+                        # Limpiar cache y mantener expander abierto
+                        st.session_state.archivos_cache_persistente.pop(f"archivos_{id_solicitud}", None)
+                        mantener_estado_expander_persistente(id_solicitud, forzar_abierto=True, accion='refresh_archivos')
+                        st.rerun()
+            else:
+                st.info("🔭 No hay archivos adjuntos para esta solicitud")
+
+                col1, col2, col3 = st.columns([1, 1, 2])
+                with col1:
+                    if st.button("🔄 Verificar de nuevo", key=f"recheck_files_{id_solicitud}"):
+                        # Limpiar cache y mantener expander abierto
+                        st.session_state.archivos_cache_persistente.pop(f"archivos_{id_solicitud}", None)
+                        mantener_estado_expander_persistente(id_solicitud, forzar_abierto=True, accion='recheck_archivos')
+                        st.rerun()
+
         else:
-            # Mostrar botón de carga bajo demanda
-            with archivos_placeholder.container():
+            # No hay cache, mostrar botón para cargar
+            loading_key = f"loading_archivos_{id_solicitud}"
+
+            if st.session_state.get(loading_key, False):
+                st.info("🔄 Cargando archivos adjuntos...")
+
+                # Cargar archivos y guardar en cache persistente
+                try:
+                    archivos_adjuntos = gestor_datos.obtener_archivos_adjuntos_solicitud(id_solicitud)
+                    # Guardar en cache persistente
+                    cache_archivos_persistente(id_solicitud, archivos_adjuntos)
+                    # Mantener expander abierto
+                    mantener_estado_expander_persistente(id_solicitud, forzar_abierto=True, accion='cargar_archivos')
+                    st.session_state[loading_key] = False
+                    st.rerun()
+                except Exception as e:
+                    cache_archivos_persistente(id_solicitud, [])
+                    st.session_state[loading_key] = False
+                    st.error(f"❌ Error al cargar archivos: {str(e)}")
+            else:
                 col1, col2 = st.columns([1, 2])
 
                 with col1:
                     cargar_archivos = st.button(
                         "📁 Cargar archivos adjuntos",
-                        key=f"load_files_{solicitud['id_solicitud']}",
+                        key=f"load_files_{id_solicitud}",
                         help="Haz clic para cargar y ver archivos adjuntos"
                     )
 
@@ -676,16 +809,10 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                     st.caption("👆 Los archivos se cargan solo cuando los necesites")
 
                 if cargar_archivos:
-                    with st.spinner("🔄 Cargando archivos adjuntos..."):
-                        try:
-                            archivos_adjuntos = gestor_datos.obtener_archivos_adjuntos_solicitud(
-                                solicitud['id_solicitud'])
-                            st.session_state[archivos_key] = archivos_adjuntos
-                            st.rerun()
-                        except Exception as e:
-                            st.session_state[archivos_key] = []
-                            st.error(f"❌ Error al cargar archivos: {str(e)}")
-                            print(f"Error cargando archivos para {solicitud['id_solicitud']}: {e}")
+                    st.session_state[loading_key] = True
+                    # Mantener expander abierto durante la carga
+                    mantener_estado_expander_persistente(id_solicitud, forzar_abierto=True, accion='iniciar_carga')
+                    st.rerun()
 
         st.markdown("---")
 
@@ -761,18 +888,40 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
             # Procesar actualización
             if actualizar:
                 # Limpiar cache de datos pesados para forzar recarga después de actualización
-                if expander_key in st.session_state:
-                    del st.session_state[expander_key]
+                if expander_data_key in st.session_state:
+                    del st.session_state[expander_data_key]
 
                 # Limpiar cache de archivos para que se recarguen con archivos nuevos
-                if archivos_key in st.session_state:
-                    del st.session_state[archivos_key]
+                archivos_cache_key = f"archivos_{id_solicitud}"
+                if archivos_cache_key in st.session_state.get('archivos_cache_persistente', {}):
+                    del st.session_state.archivos_cache_persistente[archivos_cache_key]
 
                 procesar_actualizacion_sharepoint_simplificada(
                     gestor_datos, solicitud, nuevo_estado, nueva_prioridad,
                     responsable, email_responsable, nuevo_comentario,
                     notificar_solicitante, notificar_responsable, archivos_nuevos
                 )
+
+def preservar_estado_expander(id_solicitud, accion_realizada=None):
+    """Preservar el estado del expander después de acciones"""
+    estado_key = f"expander_preservado_{id_solicitud}"
+
+    if accion_realizada:
+        # Marcar que se realizó una acción para mantener abierto
+        st.session_state[estado_key] = {
+            'expandido': True,
+            'timestamp': obtener_fecha_actual_colombia(),
+            'accion': accion_realizada
+        }
+
+    # Verificar si debe mantenerse expandido
+    estado = st.session_state.get(estado_key)
+    if estado and estado.get('expandido'):
+        # Mantener expandido por 10 segundos después de la acción
+        tiempo_transcurrido = (obtener_fecha_actual_colombia() - estado['timestamp']).total_seconds()
+        return tiempo_transcurrido < 10
+
+    return False
 
 def mostrar_archivos_adjuntos_administrador_inline(gestor_datos, id_solicitud):
     """Versión inline optimizada para cargar archivos"""
@@ -863,46 +1012,45 @@ def mostrar_archivos_adjuntos_administrador(gestor_datos, id_solicitud):
         st.warning("⚠️ Error al cargar archivos adjuntos")
         print(f"Error cargando archivos adjuntos para admin: {e}")
 
-def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuevo_estado, nueva_prioridad, 
-                                                  responsable, email_responsable, nuevo_comentario,
-                                                  notificar_solicitante, notificar_responsable, archivos_nuevos=None):
-    """Proceso de actualización simplificado y confiable"""
-    
-    try:
 
+def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuevo_estado, nueva_prioridad,
+                                                   responsable, email_responsable, nuevo_comentario,
+                                                   notificar_solicitante, notificar_responsable, archivos_nuevos=None):
+    """Proceso de actualización simplificado y confiable"""
+
+    try:
         # Validación de transiciones de estado:
         estado_actual = solicitud['estado']
-        
+
         # Validar transición a Completada desde Incompleta
         if estado_actual == 'Incompleta' and nuevo_estado == 'Completada':
             st.error("❌ No se puede completar una solicitud incompleta. Primero reanúdela cambiando a 'En Proceso'.")
             return False
 
-
         # Rastrear qué cambió realmente
         cambios = {}
-        
+
         # Paso 1: Verificar qué cambió
         if nuevo_estado != solicitud['estado']:
             cambios['estado'] = {'old': solicitud['estado'], 'new': nuevo_estado}
-        
+
         if nueva_prioridad != solicitud.get('prioridad', 'Media'):
             cambios['prioridad'] = {'old': solicitud.get('prioridad', 'Media'), 'new': nueva_prioridad}
-        
+
         if responsable and responsable != solicitud.get('responsable_asignado', ''):
             cambios['responsable'] = {'old': solicitud.get('responsable_asignado', ''), 'new': responsable}
-        
+
         if nuevo_comentario and nuevo_comentario.strip():
             cambios['comentario'] = {'new': nuevo_comentario.strip()}
-        
+
         # Paso 2: Preparar comentarios con cambio automático de estado si es necesario
         comentarios_actuales = solicitud.get('comentarios_admin', '')
-        
+
         if nuevo_comentario and nuevo_comentario.strip():
             autor = responsable or st.session_state.get('usuario_admin', 'Admin')
             comentarios_finales = agregar_comentario_administrador(
-                comentarios_actuales, 
-                nuevo_comentario.strip(), 
+                comentarios_actuales,
+                nuevo_comentario.strip(),
                 autor
             )
         else:
@@ -916,23 +1064,24 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
                     comentario_automatico = f"Solicitud REANUDADA - Estado cambiado de 'Incompleta' a '{nuevo_estado}'"
                 else:
                     comentario_automatico = f"Estado cambiado de '{cambios['estado']['old']}' a '{cambios['estado']['new']}'"
-                
+
                 comentarios_finales = agregar_comentario_administrador(
-                    comentarios_actuales, 
-                    comentario_automatico, 
+                    comentarios_actuales,
+                    comentario_automatico,
                     f"{autor} (Sistema)"
                 )
-        
+
         # Paso 3: Actualizar en SharePoint (transacción única)
         with st.spinner("🔄 Actualizando solicitud..."):
-            
+
             # Actualizar prioridad si cambió
             if 'prioridad' in cambios:
-                exito_prioridad = gestor_datos.actualizar_prioridad_solicitud(solicitud['id_solicitud'], nueva_prioridad)
+                exito_prioridad = gestor_datos.actualizar_prioridad_solicitud(solicitud['id_solicitud'],
+                                                                              nueva_prioridad)
                 if not exito_prioridad:
                     st.error("❌ Error al actualizar prioridad")
                     return False
-            
+
             # Actualizar estado y comentarios
             exito_estado = gestor_datos.actualizar_estado_solicitud(
                 solicitud['id_solicitud'],
@@ -940,11 +1089,11 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
                 responsable,
                 comentarios_finales
             )
-            
+
             if not exito_estado:
                 st.error("❌ Error al actualizar la solicitud")
                 return False
-            
+
             # Manejar subida de archivos
             archivos_subidos = []
             if archivos_nuevos:
@@ -959,16 +1108,16 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
                                 archivos_subidos.append(archivo_subido.name)
                         except Exception:
                             continue  # Saltar subidas fallidas
-            
+
             if archivos_subidos:
                 cambios['archivos'] = {'new': archivos_subidos}
-        
+
         # Paso 4: Enviar notificaciones al solicitante solo si se solicita y ocurrieron cambios
         email_enviado = False
         if notificar_solicitante and cambios:
             try:
                 gestor_email = GestorNotificacionesEmail()
-                
+
                 datos_solicitud = {
                     'id_solicitud': solicitud['id_solicitud'],
                     'tipo_solicitud': solicitud['tipo_solicitud'],
@@ -977,15 +1126,15 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
                     'area': solicitud.get('area', 'N/A'),
                     'proceso': solicitud.get('proceso', 'N/A')
                 }
-                
+
                 # Enviar notificación sin adjuntos
                 email_enviado = gestor_email.enviar_notificacion_actualizacion_solo_cambios(
                     datos_solicitud, cambios, responsable, email_responsable
                 )
-                        
+
             except Exception as e:
                 print(f"Error en notificación por email: {e}")
-                
+
         # Paso 4b: Notificación opcional al responsable
         email_responsable_enviado = False
         if notificar_responsable and email_responsable and email_responsable.strip() and cambios:
@@ -999,24 +1148,23 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
                     'area': solicitud.get('area', 'N/A'),
                     'proceso': solicitud.get('proceso', 'N/A')
                 }
-                
+
                 email_responsable_enviado = gestor_email.enviar_notificacion_responsable(
                     datos_responsable, cambios, responsable, email_responsable
                 )
-                
+
             except Exception as e:
                 print(f"Error en notificación de responsable: {e}")
 
         # Paso 5: Recargar datos y mostrar éxito
         gestor_datos.cargar_datos(forzar_recarga=True)
 
-
         # Borrar cache y forzar actualización
         invalidar_y_actualizar_cache()
-       
+
         # Mostrar mensaje de éxito limpio
         st.success(f"✅ Solicitud {solicitud['id_solicitud']} actualizada correctamente")
-        
+
         if cambios:
             textos_cambios = []
             if 'estado' in cambios:
@@ -1029,30 +1177,39 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
                 textos_cambios.append("Nuevo comentario agregado")
             if 'archivos' in cambios:
                 textos_cambios.append(f"{len(cambios['archivos']['new'])} archivo(s) subido(s)")
-            
+
             if email_enviado:
                 textos_cambios.append("Notificación enviada al solicitante")
 
             if email_responsable_enviado:
                 textos_cambios.append(f"Notificación enviada a {email_responsable}")
-            
+
             st.info("🔄 Cambios: " + " | ".join(textos_cambios))
-        
+
+        # Mantener expander abierto después de actualización
+        mantener_estado_expander_persistente(solicitud['id_solicitud'], forzar_abierto=True, accion='actualizacion')
+
+        # Invalidar cache de archivos si se subieron nuevos
+        if 'archivos' in cambios:
+            archivos_cache_key = f"archivos_{solicitud['id_solicitud']}"
+            if archivos_cache_key in st.session_state.get('archivos_cache_persistente', {}):
+                del st.session_state.archivos_cache_persistente[archivos_cache_key]
+
         # Marcar para retroalimentación de UI
         st.session_state[f'actualizado_recientemente_{solicitud["id_solicitud"]}'] = {
             'timestamp': obtener_fecha_actual_colombia(),
             'nuevo_estado': nuevo_estado
         }
-        
+
         # Incrementar contador de comentarios para forzar nuevo widget
         if nuevo_comentario and nuevo_comentario.strip():
             clave_contador = f'contador_comentario_{solicitud["id_solicitud"]}'
             contador_actual = st.session_state.get(clave_contador, 0)
             st.session_state[clave_contador] = contador_actual + 1
             st.rerun()
-        
+
         return True
-            
+
     except Exception as e:
         st.error(f"❌ Error al procesar actualización: {str(e)}")
         return False

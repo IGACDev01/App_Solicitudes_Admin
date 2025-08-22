@@ -59,6 +59,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
 def invalidar_cache_datos():
     """Invalidar cache de datos después de operaciones de escritura"""
     try:
@@ -97,11 +98,31 @@ def inicializar_estado_sesion():
     if 'usuario_admin' not in st.session_state:
         st.session_state.usuario_admin = None
 
+
+def limpiar_sesiones_periodicamente():
+    """Limpiar sesiones cada 5 minutos para evitar memory leaks"""
+    timestamp_actual = time.time()
+    ultima_limpieza_key = 'ultima_limpieza_sesiones'
+
+    ultima_limpieza = st.session_state.get(ultima_limpieza_key, 0)
+
+    # Limpiar cada 5 minutos
+    if timestamp_actual - ultima_limpieza > 300:
+        # Importar función de limpieza
+        try:
+            from admin_solicitudes import limpiar_estados_expirados
+            limpiar_estados_expirados()
+            st.session_state[ultima_limpieza_key] = timestamp_actual
+        except ImportError:
+            pass
+
 def main():
     """Función principal de la aplicación"""
 
     # Inicializar estado de sesión
     inicializar_estado_sesion()
+
+    limpiar_sesiones_periodicamente()
     
     # Título principal
     col1, spacer, col2 = st.columns([10, 0.5, 1])
