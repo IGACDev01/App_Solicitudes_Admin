@@ -334,7 +334,7 @@ def mostrar_filtros_busqueda(df):
         )
 
     # Aplicar filtros
-    df_filtrado = df.copy()
+    df_filtrado = df
 
     # Filtro de estados (múltiple)
     if filtros_estado:
@@ -354,8 +354,10 @@ def mostrar_filtros_busqueda(df):
 
     # === NUEVO: Ordenar TODAS las solicitudes filtradas por fecha (más reciente primero) ===
     if 'fecha_solicitud' in df_filtrado.columns and not df_filtrado.empty:
-        df_filtrado['fecha_solicitud_normalizada'] = df_filtrado['fecha_solicitud'].apply(normalizar_datetime)
-        df_filtrado = df_filtrado.sort_values('fecha_solicitud_normalizada', ascending=False)
+        df_filtrado = df_filtrado.assign(
+            fecha_solicitud_normalizada=df_filtrado['fecha_solicitud'].apply(normalizar_datetime)
+        ).sort_values('fecha_solicitud_normalizada', ascending=False)
+
         # Remover la columna auxiliar
         df_filtrado = df_filtrado.drop('fecha_solicitud_normalizada', axis=1)
 
@@ -771,7 +773,7 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                     responsable, email_responsable, nuevo_comentario,
                     notificar_solicitante, notificar_responsable, archivos_nuevos
                 )
-                
+
 def mostrar_archivos_adjuntos_administrador_inline(gestor_datos, id_solicitud):
     """Versión inline optimizada para cargar archivos"""
     try:
