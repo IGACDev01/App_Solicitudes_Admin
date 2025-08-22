@@ -1,4 +1,5 @@
 import streamlit as st
+from datetime import timedelta
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -96,29 +97,25 @@ def mostrar_tab_dashboard(gestor_datos):
         st.info("📋 No hay solicitudes registradas aún. ¡Registre la primera solicitud en la pestaña de Registro!")
         return
 
+    st.header("📊 Dashboard de Solicitudes")
+    usuario_actual = st.session_state.get('usuario_dashboard', 'Usuario')
+    st.caption(f"👤 Sesión activa: {usuario_actual}")
+
     # Header con opción de cerrar sesión
-    col1, col2, col3 = st.columns([3, 1, 1])
+    col1, col2 = st.columns([1, 1])
     
     with col1:
-        st.header("📊 Dashboard de Solicitudes")
-        usuario_actual = st.session_state.get('usuario_dashboard', 'Usuario')
-        st.caption(f"👤 Sesión activa: {usuario_actual}")
+        if st.button("🔄 Actualizar Datos", key="actualizar_dashboard"):
+            invalidar_y_actualizar_cache()
+            st.rerun()
+
     
     with col2:
-        None
-
-    with col3:
-        if st.button("Cerrar Sesión", key="cerrar_sesion_dashboard"):
+        if st.button("🚪 Cerrar Sesión", key="cerrar_sesion_dashboard"):
             st.session_state.dashboard_autenticado = False
             st.session_state.usuario_dashboard = None
             st.rerun()
 
-    st.markdown(" ")
-
-    if st.button("🔄 Actualizar Datos", key="actualizar_dashboard"):
-        invalidar_y_actualizar_cache()
-        st.rerun()
-    
     st.markdown("---")
 
     # Inicializar o incrementar versión de filtro para claves de widgets
@@ -322,39 +319,16 @@ def mostrar_visualizador_dataframe(gestor_datos):
     if df_filtrado.empty:
         st.warning("⚠️ No se encontraron solicitudes con los filtros aplicados")
         return
-    
-    # Selección de columnas para mostrar
-    with st.expander("📋 Seleccionar Columnas a Mostrar", expanded=False):
-        columnas_disponibles = list(df_filtrado.columns)
-        
-        # Columnas importantes por defecto
-        columnas_predeterminadas = [
-            'id_solicitud', 'nombre_solicitante', 'estado', 'tipo_solicitud',
-            'fecha_solicitud', 'territorial', 'proceso', 'prioridad'
-        ]
-        
-        # Filtrar columnas predeterminadas para incluir solo las que existen
-        columnas_predeterminadas = [col for col in columnas_predeterminadas if col in columnas_disponibles]
-        
-        # Multi-select para columnas
-        columnas_seleccionadas = st.multiselect(
-            "Columnas a mostrar:",
-            options=columnas_disponibles,
-            default=columnas_predeterminadas,
-            help="Seleccione las columnas que desea visualizar"
-        )
-        
-        if not columnas_seleccionadas:
-            columnas_seleccionadas = columnas_predeterminadas
+
 
     max_filas = st.selectbox("📏 Filas a mostrar", [10, 25, 50, 100, "Todas"], index=1)
 
     # Aplicar límite de filas
     if max_filas != "Todas":
-        df_mostrar = df_filtrado[columnas_seleccionadas].head(max_filas)
+        df_mostrar = df_filtrado.head(max_filas)
     else:
-        df_mostrar = df_filtrado[columnas_seleccionadas]
-     
+        df_mostrar = df_filtrado
+
     # Formatear fechas para mejor visualización
     df_mostrar_formateado = df_mostrar.copy()
     
@@ -387,89 +361,141 @@ def mostrar_visualizador_dataframe(gestor_datos):
     # Mostrar contador de resultados filtrados
     st.info(f"📊 Mostrando {len(df_filtrado)} de {len(df)} solicitudes")
 
-    # Estadísticas rápidas para datos filtrados
-    if len(df_filtrado) > 0:
-        st.markdown("---")
-        st.markdown("### 📈 Estadísticas de Datos Filtrados")
-        
-        stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
-        
-        with stat_col1:
-            st.metric("Total Filtrado", len(df_filtrado))
-        
-        with stat_col2:
-            if 'estado' in df_filtrado.columns:
-                estado_mas_comun = df_filtrado['estado'].mode().iloc[0] if not df_filtrado['estado'].empty else "N/A"
-                st.metric("Estado Más Común", estado_mas_comun)
-        
-        with stat_col3:
-            if 'tiempo_resolucion_dias' in df_filtrado.columns:
-                completadas = df_filtrado[df_filtrado['estado'] == 'Completada']
-                if not completadas.empty and 'tiempo_resolucion_dias' in completadas.columns:
-                    tiempo_promedio = completadas['tiempo_resolucion_dias'].mean()
-                    st.metric("Tiempo Prom. Resolución", f"{tiempo_promedio:.1f} días")
-                else:
-                    st.metric("Tiempo Prom. Resolución", "N/A")
-        
-        with stat_col4:
-            if 'territorial' in df_filtrado.columns:
-                territorial_mas_activa = df_filtrado['territorial'].mode().iloc[0] if not df_filtrado['territorial'].empty else "N/A"
-                st.metric("Territorial Más Activa", territorial_mas_activa)
 
 def mostrar_alertas_sistema(gestor_datos):
-    """Mostrar alertas del sistema"""
+    """Mostrar alertas del sistema mejoradas - adaptadas del panel admin"""
     df = gestor_datos.obtener_todas_solicitudes()
-    
+
     if df.empty:
         return
-    
-    alertas = []
-    
-    # Solicitudes antiguas sin actualizar (>7 días)
-    fecha_limite = obtener_fecha_actual_colombia() - timedelta(days=7)
-    if 'fecha_actualizacion' in df.columns:
-        try:
-            # Usar utilidad de zona horaria para comparación
-            df['fecha_actualizacion_limpia'] = df['fecha_actualizacion'].apply(convertir_a_colombia)
-            
-            solicitudes_antiguas = df[
-                (df['fecha_actualizacion_limpia'] < fecha_limite) & 
-                (df['estado'] != 'Completada')
-            ]
-            
-            if not solicitudes_antiguas.empty:
-                alertas.append({
-                    'tipo': 'warning',
-                    'titulo': '⚠️ Solicitudes sin actualizar',
-                    'mensaje': f'{len(solicitudes_antiguas)} solicitudes llevan más de 7 días sin actualización',
-                    'detalle': list(solicitudes_antiguas['id_solicitud'].head(5))
-                })
-        except Exception as e:
-            print(f"Error verificando solicitudes antiguas: {e}")
-    
-    # Solicitudes de alta prioridad asignadas
+
+    st.subheader("🚨 Alertas del Sistema")
+
+    # Calcular métricas para alertas
+    asignadas = len(df[df['estado'] == 'Asignada'])
+    incompletas = len(df[df['estado'] == 'Incompleta'])
+
+    # ALERTA 1: Solicitudes Asignadas por más de 7 días
+    if asignadas > 0:
+        fecha_limite = obtener_fecha_actual_colombia() - timedelta(days=7)
+
+        # Normalizar columnas datetime para comparación
+        df_normalizado = df.copy()
+        if 'fecha_solicitud' in df_normalizado.columns:
+            df_normalizado['fecha_solicitud'] = df_normalizado['fecha_solicitud'].apply(convertir_a_colombia)
+
+            # Filtrar solicitudes asignadas antiguas
+            antiguas = df_normalizado[
+                (df_normalizado['estado'] == 'Asignada') &
+                (df_normalizado['fecha_solicitud'] < fecha_limite)
+                ]
+
+            if not antiguas.empty:
+                with st.expander(f"⚠️ {len(antiguas)} solicitudes Asignadas por más de 7 días", expanded=False):
+                    if len(antiguas) > 0:
+                        antiguas_display = antiguas[
+                            ['id_solicitud', 'nombre_solicitante', 'proceso', 'fecha_solicitud']].copy()
+                        antiguas_display['dias_transcurridos'] = (
+                                obtener_fecha_actual_colombia() - antiguas_display['fecha_solicitud']
+                        ).dt.days
+
+                        st.dataframe(
+                            antiguas_display,
+                            column_config={
+                                "id_solicitud": "ID Solicitud",
+                                "nombre_solicitante": "Solicitante",
+                                "proceso": "Proceso",
+                                "fecha_solicitud": "Fecha Solicitud",
+                                "dias_transcurridos": "Días Transcurridos"
+                            },
+                            hide_index=True,
+                            use_container_width=True
+                        )
+
+    # ALERTA 2: Solicitudes Incompletas por más de 7 días
+    if incompletas > 0:
+        df_incompletas = df[df['estado'] == 'Incompleta']
+        if not df_incompletas.empty and 'fecha_pausa' in df_incompletas.columns:
+            fecha_actual = obtener_fecha_actual_colombia()
+
+            # Encontrar incompletas por más de 7 días
+            incompletas_antiguas_data = []
+            for _, row in df_incompletas.iterrows():
+                fecha_pausa = row.get('fecha_pausa')
+                if fecha_pausa and pd.notna(fecha_pausa):
+                    fecha_pausa_colombia = convertir_a_colombia(fecha_pausa)
+                    if fecha_pausa_colombia:
+                        dias_pausada = (fecha_actual - fecha_pausa_colombia).days
+                        if dias_pausada > 7:
+                            incompletas_antiguas_data.append({
+                                'id_solicitud': row['id_solicitud'],
+                                'nombre_solicitante': row['nombre_solicitante'],
+                                'proceso': row.get('proceso', 'N/A'),
+                                'dias_pausada': dias_pausada,
+                                'fecha_pausa': fecha_pausa_colombia
+                            })
+
+            if incompletas_antiguas_data:
+                with st.expander(f"⏸️ {len(incompletas_antiguas_data)} solicitudes incompletas por más de 7 días",
+                                 expanded=False):
+                    if len(incompletas_antiguas_data) > 0:
+                        df_incompletas_display = pd.DataFrame(incompletas_antiguas_data)
+                        st.dataframe(
+                            df_incompletas_display,
+                            column_config={
+                                "id_solicitud": "ID Solicitud",
+                                "nombre_solicitante": "Solicitante",
+                                "proceso": "Proceso",
+                                "dias_pausada": "Días Pausada",
+                                "fecha_pausa": "Fecha de Pausa"
+                            },
+                            hide_index=True,
+                            use_container_width=True
+                        )
+
+    # ALERTA 3: Solicitudes de Alta Prioridad
     if 'prioridad' in df.columns:
-        alta_prioridad_asignadas = df[
-            (df['prioridad'] == 'Alta') & 
-            (df['estado'] == 'Asignada')
-        ]
-        if not alta_prioridad_asignadas.empty:
-            alertas.append({
-                'tipo': 'error',
-                'titulo': '🔴 Alta prioridad asignada',
-                'mensaje': f'{len(alta_prioridad_asignadas)} solicitudes de alta prioridad sin atender',
-                'detalle': list(alta_prioridad_asignadas['id_solicitud'].head(5))
-            })
-    
-    # Mostrar alertas
-    if alertas:
-        st.subheader("🚨 Alertas del Sistema")
-        for alerta in alertas:
-            if alerta['tipo'] == 'warning':
-                st.warning(f"**{alerta['titulo']}**: {alerta['mensaje']}")
-            elif alerta['tipo'] == 'error':
-                st.error(f"**{alerta['titulo']}**: {alerta['mensaje']}")
-        
+        alta_prioridad_pendientes = df[
+            (df['prioridad'] == 'Alta') &
+            (df['estado'].isin(['Asignada', 'En Proceso']))
+            ]
+        if not alta_prioridad_pendientes.empty:
+            with st.expander(f"🔴 {len(alta_prioridad_pendientes)} solicitudes de Alta Prioridad pendientes",
+                             expanded=True):
+                display_cols = ['id_solicitud', 'nombre_solicitante', 'proceso', 'estado']
+                if 'fecha_solicitud' in alta_prioridad_pendientes.columns:
+                    display_cols.append('fecha_solicitud')
+
+                alta_prioridad_display = alta_prioridad_pendientes[display_cols].copy()
+
+                st.dataframe(
+                    alta_prioridad_display,
+                    column_config={
+                        "id_solicitud": "ID Solicitud",
+                        "nombre_solicitante": "Solicitante",
+                        "proceso": "Proceso",
+                        "estado": "Estado",
+                        "fecha_solicitud": "Fecha Solicitud"
+                    },
+                    hide_index=True,
+                    use_container_width=True
+                )
+
+    # Si no hay alertas, mostrar mensaje
+    total_alertas = (len(df[(df['estado'] == 'Asignada') &
+                            (df['fecha_solicitud'].apply(convertir_a_colombia) <
+                             obtener_fecha_actual_colombia() - timedelta(
+                                        days=7))]) if 'fecha_solicitud' in df.columns else 0) + \
+                    (len([row for _, row in df[df['estado'] == 'Incompleta'].iterrows()
+                          if row.get('fecha_pausa') and pd.notna(row.get('fecha_pausa')) and
+                          (obtener_fecha_actual_colombia() - convertir_a_colombia(
+                              row['fecha_pausa'])).days > 7]) if 'fecha_pausa' in df.columns else 0) + \
+                    (len(df[(df['prioridad'] == 'Alta') & (
+                        df['estado'].isin(['Asignada', 'En Proceso']))]) if 'prioridad' in df.columns else 0)
+
+    if total_alertas == 0:
+        st.success("✅ No hay alertas activas en el sistema")
+
 def mostrar_metricas_principales(gestor_datos):
     """Mostrar métricas principales en 4 filas"""
     df = gestor_datos.obtener_todas_solicitudes()
@@ -607,7 +633,7 @@ def mostrar_grafico_tipos(resumen):
                 y=list(tipos_ordenados.keys()),
                 orientation='h',
                 color=list(tipos_ordenados.values()),
-                color_continuous_scale='Viridis'
+                color_continuous_scale='Blues'
             )
             
             fig.update_layout(
@@ -737,7 +763,7 @@ def mostrar_grafico_territoriales(gestor_datos):
             y=datos_territorial.index,
             orientation='h',
             color=datos_territorial.values,
-            color_continuous_scale='Viridis'
+            color_continuous_scale='Blues'
         )
         
         fig.update_layout(
