@@ -36,34 +36,31 @@ def inicializar_estados_persistentes():
         st.session_state.archivos_cache_persistente = {}
         st.session_state.timestamp_inicializacion = time.time()
 
-def mantener_estado_expander_persistente(id_solicitud, forzar_abierto=False, accion=None):
-    """Mantener estado del expander de forma persistente"""
-    inicializar_estados_persistentes()
-
-    key = f"expander_{id_solicitud}"
+def mantener_estado_expander_persistente(id_solicitud, accion=None, forzar_abierto=False):
+    """Sistema unificado de gestiÃ³n de estado de expanders"""
+    key = f"expander_estado_{id_solicitud}"
     timestamp_actual = time.time()
 
-    # Si se fuerza abrir o hay una acción específica
-    if forzar_abierto or accion:
-        st.session_state.expanders_persistentes[key] = {
+    # Si hay una acciÃ³n especÃ­fica, marcar para mantener abierto
+    if accion or forzar_abierto:
+        st.session_state[key] = {
             'expandido': True,
             'timestamp': timestamp_actual,
             'accion': accion or 'manual',
-            'persistente': True
+            'duracion': 15  # Mantener abierto por 15 segundos
         }
         return True
 
     # Verificar estado existente
-    estado = st.session_state.expanders_persistentes.get(key)
-    if estado and estado.get('persistente'):
-        # Verificar si no ha expirado
+    estado = st.session_state.get(key)
+    if estado and estado.get('expandido'):
         tiempo_transcurrido = timestamp_actual - estado['timestamp']
-        if tiempo_transcurrido < TIEMPO_PERSISTENCIA_EXPANDER:
-            return estado['expandido']
+        if tiempo_transcurrido < estado.get('duracion', 10):
+            return True
         else:
             # Limpiar estado expirado
-            if key in st.session_state.expanders_persistentes:
-                del st.session_state.expanders_persistentes[key]
+            if key in st.session_state:
+                del st.session_state[key]
 
     return False
 
@@ -1036,27 +1033,6 @@ def borrar_archivo_con_confirmacion(gestor_datos, id_solicitud: str, nombre_arch
     except Exception as e:
         st.error(f"❌ Error inesperado al borrar archivo: {str(e)}")
         return False
-
-def preservar_estado_expander(id_solicitud, accion_realizada=None):
-    """Preservar el estado del expander después de acciones"""
-    estado_key = f"expander_preservado_{id_solicitud}"
-
-    if accion_realizada:
-        # Marcar que se realizó una acción para mantener abierto
-        st.session_state[estado_key] = {
-            'expandido': True,
-            'timestamp': obtener_fecha_actual_colombia(),
-            'accion': accion_realizada
-        }
-
-    # Verificar si debe mantenerse expandido
-    estado = st.session_state.get(estado_key)
-    if estado and estado.get('expandido'):
-        # Mantener expandido por 10 segundos después de la acción
-        tiempo_transcurrido = (obtener_fecha_actual_colombia() - estado['timestamp']).total_seconds()
-        return tiempo_transcurrido < 10
-
-    return False
 
 def mostrar_archivos_adjuntos_administrador_inline(gestor_datos, id_solicitud):
     """Versión inline optimizada para cargar archivos"""
