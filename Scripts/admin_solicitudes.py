@@ -11,17 +11,23 @@ import xlsxwriter
 
 # Credenciales por proceso
 CREDENCIALES_ADMINISTRADORES = {
-    "Almacén": {"usuario": "admin_almacen", "password": "Almacen3455*"},
-    "Archivo": {"usuario": "admin_archivo", "password": "Archivo4790*"},
-    "Contabilidad": {"usuario": "admin_contabilidad", "password": "Contable9865#"},
-    "Contractual": {"usuario": "admin_contractual", "password": "Contractual6518!"},
-    "Correspondencia": {"usuario": "admin_correspondencia", "password": "Correo3981$"},
-    "Infraestructura": {"usuario": "admin_infraestructura", "password": "Infraestructura2387!"},
-    "Operación Logística SAF": {"usuario": "admin_operacion", "password": "Logistica0978#"},
-    "Presupuesto": {"usuario": "admin_presupuesto", "password": "Presupuesto3425$"},
-    "Tesorería": {"usuario": "admin_tesoreria", "password": "Tesoreria9248!"},
-    "Tiquetes": {"usuario": "admin_tiquetes", "password": "Tiquetes9845$"},
-    "Transporte": {"usuario": "admin_transporte", "password": "Transporte5926*"}
+    "Subdirección Administrativa y Financiera": {
+        "Almacén": {"usuario": "admin_almacen", "password": "Almacen3455*"},
+        "Archivo": {"usuario": "admin_archivo", "password": "Archivo4790*"},
+        "Contabilidad": {"usuario": "admin_contabilidad", "password": "Contable9865#"},
+        "Contractual": {"usuario": "admin_contractual", "password": "Contractual6518!"},
+        "Correspondencia": {"usuario": "admin_correspondencia", "password": "Correo3981$"},
+        "Infraestructura": {"usuario": "admin_infraestructura", "password": "Infraestructura2387!"},
+        "Operación Logística SAF": {"usuario": "admin_operacion", "password": "Logistica0978#"},
+        "Presupuesto": {"usuario": "admin_presupuesto", "password": "Presupuesto3425$"},
+        "Tesorería": {"usuario": "admin_tesoreria", "password": "Tesoreria9248!"},
+        "Tiquetes": {"usuario": "admin_tiquetes", "password": "Tiquetes9845$"},
+        "Transporte": {"usuario": "admin_transporte", "password": "Transporte5926*"}
+    },
+    "Oficina Asesora de Comunicaciones": {
+        "Comunicación Externa": {"usuario": "admin_com_externa", "password": "ComExt2024!"},
+        "Comunicación Interna": {"usuario": "admin_com_interna", "password": "ComInt2024!"}
+    }
 }
 
 # Configuración de persistencia
@@ -196,6 +202,7 @@ def formatear_comentarios_administrador_para_mostrar(comentarios):
     
     return '\n\n'.join(comentarios_html)
 
+
 def mostrar_tab_administrador(gestor_datos):
     """Tab principal de administración - optimizado para SharePoint"""
 
@@ -205,17 +212,25 @@ def mostrar_tab_administrador(gestor_datos):
     # Limpiar estados expirados cada vez
     limpiar_estados_expirados()
 
-    # Verificar autenticación
+    # Verificar autenticación PRIMERO
     if not st.session_state.get('admin_autenticado', False):
         mostrar_login_administrador()
         return
 
-    # Obtener proceso del admin autenticado
+    # Si llegamos aquí, el usuario está autenticado
+    # Obtener área y proceso del admin autenticado
+    area_admin = st.session_state.get('area_admin', '')
     proceso_admin = st.session_state.get('proceso_admin', '')
 
-    # Header
+    # Validar que área y proceso existan
+    if not area_admin or not proceso_admin:
+        st.error("❌ Error en la sesión. Por favor, inicie sesión nuevamente.")
+        st.session_state.admin_autenticado = False
+        st.rerun()
+        return
 
-    st.header(f"⚙️ Panel de Administración - {proceso_admin}")
+    # Header
+    st.header(f"⚙️ Panel de Administración - {area_admin} - {proceso_admin}")
 
     # Indicador de estado de SharePoint
     estado = gestor_datos.obtener_estado_sharepoint()
@@ -230,14 +245,14 @@ def mostrar_tab_administrador(gestor_datos):
 
     st.markdown("---")
 
-    # Botones de funcinalidades
+    # Botones de funcionalidades
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
-
         if st.button("🔄 Actualizar Datos", key="actualizar_admin"):
             invalidar_y_actualizar_cache()
             st.cache_resource.clear()
             st.rerun()
+
     with col2:
         # Botón de exportación a Excel
         df_proceso = obtener_solicitudes_del_proceso(gestor_datos, proceso_admin)
@@ -260,6 +275,7 @@ def mostrar_tab_administrador(gestor_datos):
     with col3:
         if st.button("🚪 Cerrar Sesión", key="cerrar_sesion_admin"):
             st.session_state.admin_autenticado = False
+            st.session_state.area_admin = None
             st.session_state.proceso_admin = None
             st.session_state.usuario_admin = None
             st.rerun()
@@ -284,40 +300,80 @@ def mostrar_tab_administrador(gestor_datos):
     # Lista de solicitudes para gestionar
     mostrar_lista_solicitudes_administrador_mejorada(gestor_datos, df, proceso_admin)
 
+
 def mostrar_login_administrador():
-    """Formulario de login simple"""
+    """Formulario de login simple con selección de área"""
     st.markdown("### 🔐 Acceso de Administrador")
-    
-    with st.form("login_admin"):
-        col1, col2, col3 = st.columns([1, 2, 1])
-        
-        with col2:
+
+    # Inicializar session state para área si no existe
+    if 'area_login_selected' not in st.session_state:
+        st.session_state.area_login_selected = list(CREDENCIALES_ADMINISTRADORES.keys())[0]
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col2:
+        # Selector de área con callback para actualizar procesos
+        area_actual = st.selectbox(
+            "Área:",
+            options=list(CREDENCIALES_ADMINISTRADORES.keys()),
+            index=list(CREDENCIALES_ADMINISTRADORES.keys()).index(st.session_state.area_login_selected),
+            key="area_login_selectbox"
+        )
+
+        # Detectar cambio de área y actualizar session state
+        if area_actual != st.session_state.area_login_selected:
+            st.session_state.area_login_selected = area_actual
+            # Limpiar proceso seleccionado cuando cambia el área
+            if 'proceso_login_selected' in st.session_state:
+                del st.session_state.proceso_login_selected
+            st.rerun()
+
+        # Obtener procesos disponibles basados en área seleccionada
+        procesos_disponibles = list(CREDENCIALES_ADMINISTRADORES[area_actual].keys())
+
+        # Inicializar proceso seleccionado si no existe o no es válido para área actual
+        if 'proceso_login_selected' not in st.session_state or \
+                st.session_state.proceso_login_selected not in procesos_disponibles:
+            st.session_state.proceso_login_selected = procesos_disponibles[0]
+
+        # Formulario con proceso, usuario y contraseña
+        with st.form("login_admin"):
             proceso = st.selectbox(
                 "Proceso:",
-                options=list(CREDENCIALES_ADMINISTRADORES.keys()),
+                options=procesos_disponibles,
+                index=procesos_disponibles.index(st.session_state.proceso_login_selected),
                 key="proceso_login"
             )
-            
+
             usuario = st.text_input("Usuario:", key="usuario_login")
             password = st.text_input("Contraseña:", type="password", key="password_login")
-            
+
             submitted = st.form_submit_button("🔓 Iniciar Sesión", use_container_width=True)
-            
+
             if submitted:
-                if autenticar_administrador(proceso, usuario, password):
+                if autenticar_administrador(area_actual, proceso, usuario, password):
                     st.session_state.admin_autenticado = True
+                    st.session_state.area_admin = area_actual
                     st.session_state.proceso_admin = proceso
                     st.session_state.usuario_admin = usuario
+
+                    # Limpiar variables de login
+                    if 'area_login_selected' in st.session_state:
+                        del st.session_state.area_login_selected
+                    if 'proceso_login_selected' in st.session_state:
+                        del st.session_state.proceso_login_selected
+
                     st.success(f"✅ Bienvenido, {usuario}")
                     st.rerun()
                 else:
                     st.error("❌ Credenciales incorrectas")
 
-def autenticar_administrador(proceso, usuario, password):
+def autenticar_administrador(area, proceso, usuario, password):
     """Autenticar credenciales"""
-    if proceso in CREDENCIALES_ADMINISTRADORES:
-        creds = CREDENCIALES_ADMINISTRADORES[proceso]
-        return usuario == creds["usuario"] and password == creds["password"]
+    if area in CREDENCIALES_ADMINISTRADORES:
+        if proceso in CREDENCIALES_ADMINISTRADORES[area]:
+            creds = CREDENCIALES_ADMINISTRADORES[area][proceso]
+            return usuario == creds["usuario"] and password == creds["password"]
     return False
 
 def obtener_solicitudes_del_proceso(gestor_datos, proceso_admin):

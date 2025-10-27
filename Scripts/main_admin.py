@@ -94,6 +94,8 @@ def inicializar_estado_sesion():
         st.session_state.usuario_dashboard = None
     if 'admin_autenticado' not in st.session_state:
         st.session_state.admin_autenticado = False
+    if 'area_admin' not in st.session_state:
+        st.session_state.area_admin = None
     if 'proceso_admin' not in st.session_state:
         st.session_state.proceso_admin = None
     if 'usuario_admin' not in st.session_state:

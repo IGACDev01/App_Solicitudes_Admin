@@ -64,34 +64,38 @@ class GestorNotificacionesEmail:
         except Exception as e:
             print(f"Error en autenticación de email: {e}")
             return None
-    
+
     def obtener_responsables_email(self, area: str, proceso: str, tipo_solicitud: str) -> list:
-        """Obtiene emails de responsables basado solo en el proceso"""
-        # Mapeo de emails basado solo en proceso
+        """Obtiene emails de responsables basado en área y proceso"""
+        # Mapeo de emails basado en área y proceso
         mapeo_responsables = {
-            # Subdirección Administrativa y Financiera
-            "Almacén": ["TESTalmacengeneral@igac.gov.co"],
-            "Archivo": ["TESTgestiondocumental@igac.gov.co"],
-            "Contabilidad": ["TESTdoris.aragon@igac.gov.co"],
-            "Contractual": ["TESTcontratacion@igac.gov.co"],
-            "Correspondencia": ["TESTgestiondocumental@igac.gov.co"],
-            "Infraestructura": ["TESTserviadministrativo@igac.gov.co"],
-            "Operación Logística SAF": ["TESTopl@igac.gov.co"],
-            "Presupuesto": ["TESTdianap.carvajal@igac.gov.co"],
-            "Tesorería": ["TESTmdevia@igac.gov.co"],
-            "Tiquetes": ["TESTtiquetes@igac.gov.co"],
-            "Transporte": ["TESTtransporte@igac.gov.co"]
+            "Subdirección Administrativa y Financiera": {
+                "Almacén": ["TESTalmacengeneral@igac.gov.co"],
+                "Archivo": ["TESTgestiondocumental@igac.gov.co"],
+                "Contabilidad": ["TESTdoris.aragon@igac.gov.co"],
+                "Contractual": ["TESTcontratacion@igac.gov.co"],
+                "Correspondencia": ["TESTgestiondocumental@igac.gov.co"],
+                "Infraestructura": ["TESTserviadministrativo@igac.gov.co"],
+                "Operación Logística SAF": ["TESTopl@igac.gov.co"],
+                "Presupuesto": ["TESTdianap.carvajal@igac.gov.co"],
+                "Tesorería": ["TESTmdevia@igac.gov.co"],
+                "Tiquetes": ["TESTtiquetes@igac.gov.co"],
+                "Transporte": ["TESTtransporte@igac.gov.co"]
+            },
+            "Oficina Asesora de Comunicaciones": {
+                "Comunicación Externa": ["TESTcomunicaciones@igac.gov.co"],
+                "Comunicación Interna": ["TESTcomunicacioninterna@igac.gov.co"]
+            }
         }
-        
-        # Obtener responsables para el proceso
-        responsables = mapeo_responsables.get(proceso, [])
-        
-        # Si no hay responsables específicos, asignar coordinador de la app
+
+        # Obtener responsables para el área y proceso
+        responsables = []
+        if area in mapeo_responsables and proceso in mapeo_responsables[area]:
+            responsables = mapeo_responsables[area][proceso]
+
+        # Si no hay responsables específicos, asignar coordinador
         if not responsables:
-            if area == "Subdirección Administrativa y Financiera":
-                responsables = ["juan.vallejo@igac.gov.co"]
-            else:
-                responsables = ["juan.vallejo@igac.gov.co"]
+            responsables = ["juan.vallejo@igac.gov.co"]
 
         return responsables
     
