@@ -33,12 +33,14 @@ def mostrar_login_dashboard():
 def cargar_credenciales_dashboard():
     """Cargar credenciales del dashboard desde Streamlit secrets o fallback por defecto"""
     try:
-        # Intentar cargar desde secrets
-        creds = dict(st.secrets.get("dashboard_credentials", {}))
-        if 'usuario' in creds and 'password' in creds:
+        # Intentar cargar desde secrets (estructura plana compatible con Streamlit Cloud)
+        usuario = st.secrets.get("dashboard_usuario")
+        password = st.secrets.get("dashboard_password")
+
+        if usuario and password:
             return {
-                'usuario': creds['usuario'],
-                'password': creds['password']
+                'usuario': usuario,
+                'password': password
             }
         return _obtener_credenciales_dashboard_defecto()
     except Exception as e:

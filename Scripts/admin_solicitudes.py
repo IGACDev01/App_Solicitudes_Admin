@@ -13,21 +13,54 @@ import xlsxwriter
 def cargar_credenciales_administradores():
     """Cargar credenciales desde Streamlit secrets o fallback a diccionario por defecto"""
     try:
-        # Intentar cargar desde secrets
-        credenciales = dict(st.secrets.get("admin_credentials", {}))
+        # Mapeo de procesos a sus claves en secrets
+        mapeo_procesos = {
+            "Almacén": "admin_almacen",
+            "Archivo": "admin_archivo",
+            "Contabilidad": "admin_contabilidad",
+            "Contractual": "admin_contractual",
+            "Correspondencia": "admin_correspondencia",
+            "Infraestructura": "admin_infraestructura",
+            "Operación Logística SAF": "admin_operacion",
+            "Presupuesto": "admin_presupuesto",
+            "Tesorería": "admin_tesoreria",
+            "Tiquetes": "admin_tiquetes",
+            "Transporte": "admin_transporte",
+            "Comunicación Externa": "admin_com_externa",
+            "Comunicación Interna": "admin_com_interna"
+        }
 
-        # Convertir la estructura TOML a diccionario Python
-        credenciales_procesadas = {}
-        for area, procesos in credenciales.items():
-            credenciales_procesadas[area] = {}
-            for proceso, datos in procesos.items():
-                if isinstance(datos, dict) and 'usuario' in datos:
-                    credenciales_procesadas[area][proceso] = {
-                        'usuario': datos['usuario'],
-                        'password': datos['password']
+        # Construir credenciales desde secrets
+        credenciales_procesadas = {
+            "Subdirección Administrativa y Financiera": {},
+            "Oficina Asesora de Comunicaciones": {}
+        }
+
+        # Admin procesos de Subdirección Administrativa y Financiera
+        for proceso, clave_base in mapeo_procesos.items():
+            if proceso not in ["Comunicación Externa", "Comunicación Interna"]:
+                usuario_key = f"{clave_base}_usuario"
+                password_key = f"{clave_base}_password"
+
+                if usuario_key in st.secrets and password_key in st.secrets:
+                    credenciales_procesadas["Subdirección Administrativa y Financiera"][proceso] = {
+                        'usuario': st.secrets[usuario_key],
+                        'password': st.secrets[password_key]
                     }
 
-        return credenciales_procesadas if credenciales_procesadas else _cargar_credenciales_defecto()
+        # Admin procesos de Oficina Asesora de Comunicaciones
+        for proceso, clave_base in mapeo_procesos.items():
+            if proceso in ["Comunicación Externa", "Comunicación Interna"]:
+                usuario_key = f"{clave_base}_usuario"
+                password_key = f"{clave_base}_password"
+
+                if usuario_key in st.secrets and password_key in st.secrets:
+                    credenciales_procesadas["Oficina Asesora de Comunicaciones"][proceso] = {
+                        'usuario': st.secrets[usuario_key],
+                        'password': st.secrets[password_key]
+                    }
+
+        return credenciales_procesadas if credenciales_procesadas["Subdirección Administrativa y Financiera"] else _cargar_credenciales_defecto()
 
     except Exception as e:
         print(f"Advertencia: No se pudo cargar credenciales desde secrets: {e}")
