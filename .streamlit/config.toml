@@ -4,6 +4,17 @@ base="light"
 primaryColor="#006AB3"
 secondaryBackgroundColor="#f0f2f6"
 
+[server]
+enableXsrfProtection = false
+enableCORS = false
+
+[browser]
+gatherUsageStats = false
+serverAddress = "0.0.0.0"
+
+# Critical for fixing module loading issues
+[runner]
+fastReruns = false
 
 
  

@@ -7,6 +7,9 @@ from timezone_utils_admin import obtener_fecha_actual_colombia
 from admin_solicitudes import mostrar_tab_administrador
 from utils import obtener_cache_key
 
+st.set_option('client.showErrorDetails', False)
+st.set_option('client.toolbarMode', 'minimal')
+
 # Configuración de página
 st.set_page_config(
     page_title="Sistema de Gestión de Solicitudes",
@@ -122,78 +125,88 @@ def limpiar_sesiones_periodicamente():
 def main():
     """Función principal de la aplicación"""
 
-    # Inicializar estado de sesión
-    inicializar_estado_sesion()
+    try:
 
-    limpiar_sesiones_periodicamente()
-    
-    # Título principal
-    col1, spacer, col2 = st.columns([10, 0.5, 1])
-    
-    with col1:
-        st.markdown("""
-        <div class="main-header">
-            <div class="header-text">
-                <h1>Administrador de Solicitudes</h1>
+        # Inicializar estado de sesión
+        inicializar_estado_sesion()
+        limpiar_sesiones_periodicamente()
+
+        # Título principal
+        col1, spacer, col2 = st.columns([10, 0.5, 1])
+
+        with col1:
+            st.markdown("""
+            <div class="main-header">
+                <div class="header-text">
+                    <h1>Administrador de Solicitudes</h1>
+                </div>
             </div>
+            """, unsafe_allow_html=True)
+        with spacer:
+            st.empty()
+
+        with col2:
+            st.image("Theme/Logo IGAC.png", width=100)
+
+        # Obtener gestor de datos (en caché)
+        gestor_datos = obtener_gestor_datos()
+
+
+        # Llave de cache para forzar la actualización
+        cache_key = obtener_cache_key()
+
+        # Obtener datos en caché en lugar de refrescar siempre
+        df_en_cache = obtener_datos_sharepoint_en_cache(cache_key)
+        gestor_datos.df = df_en_cache
+
+        # Mostrar estado de conexión
+        estado = gestor_datos.obtener_estado_sharepoint()
+        if not estado['sharepoint_conectado']:
+            error_msg = estado.get('error_mensaje', 'Error de conexión desconocido')
+            st.error(f"❌ SharePoint: {error_msg}")
+            st.info("🔄 Actualizando página en 10 segundos...")
+            time.sleep(10)
+            st.rerun()
+
+        # Mostrar frescura de datos - simplificado sin get_stats()
+        if not df_en_cache.empty:
+            ultima_actualizacion = obtener_fecha_actual_colombia().strftime('%H:%M:%S')
+            st.caption(f"📊 Datos en caché | Total solicitudes: {len(df_en_cache)} | Actualizado: {ultima_actualizacion} | Cache TTL: 60s")
+
+
+        # Crear control segmentado para navegación
+        tab = st.segmented_control(
+            "Navegación",
+            ["⚙️ Administrar Solicitudes", "📊 Dashboard"],
+            selection_mode="single",
+            default="⚙️ Administrar Solicitudes",
+            label_visibility="collapsed",
+        )
+
+        # Mostrar contenido basado en selección del control segmentado
+        if tab == "⚙️ Administrar Solicitudes":
+            mostrar_tab_administrador(gestor_datos)
+
+        elif tab == "📊 Dashboard":
+            mostrar_tab_dashboard(gestor_datos)
+
+        # Footer de la aplicación
+        st.markdown("""
+        <div class="footer">
+            © 2025 Instituto Geográfico Agustín Codazzi (IGAC) - Todos los derechos reservados | 
+            Sistema de Gestión de Solicitudes v2.0
         </div>
         """, unsafe_allow_html=True)
-    with spacer:
-        st.empty() 
-    
-    with col2:
-        st.image("Theme/Logo IGAC.png", width=100)
-    
-    # Obtener gestor de datos (en caché)
-    gestor_datos = obtener_gestor_datos()
 
+    except Exception as e:
+        # Handle JavaScript errors gracefully
+        if "dynamically imported module" in str(e):
+            st.warning("⚠️ Error de carga temporal. Por favor, recargue la página.")
+            if st.button("🔄 Recargar Página"):
+                st.rerun()
+        else:
+            st.error(f"Error: {e}")
 
-    # Llave de cache para forzar la actualización
-    cache_key = obtener_cache_key()
-    
-    # Obtener datos en caché en lugar de refrescar siempre
-    df_en_cache = obtener_datos_sharepoint_en_cache(cache_key)
-    gestor_datos.df = df_en_cache
-    
-    # Mostrar estado de conexión
-    estado = gestor_datos.obtener_estado_sharepoint()
-    if not estado['sharepoint_conectado']:
-        error_msg = estado.get('error_mensaje', 'Error de conexión desconocido')
-        st.error(f"❌ SharePoint: {error_msg}")
-        st.info("🔄 Actualizando página en 10 segundos...")
-        time.sleep(10)
-        st.rerun()
-
-    # Mostrar frescura de datos - simplificado sin get_stats()
-    if not df_en_cache.empty:
-        ultima_actualizacion = obtener_fecha_actual_colombia().strftime('%H:%M:%S')
-        st.caption(f"📊 Datos en caché | Total solicitudes: {len(df_en_cache)} | Actualizado: {ultima_actualizacion} | Cache TTL: 60s")
-    
-    
-    # Crear control segmentado para navegación
-    tab = st.segmented_control(
-        "Navegación",
-        ["⚙️ Administrar Solicitudes", "📊 Dashboard"],
-        selection_mode="single",
-        default="⚙️ Administrar Solicitudes",
-        label_visibility="collapsed",
-    )
-    
-    # Mostrar contenido basado en selección del control segmentado  
-    if tab == "⚙️ Administrar Solicitudes":
-        mostrar_tab_administrador(gestor_datos)
-    
-    elif tab == "📊 Dashboard":
-        mostrar_tab_dashboard(gestor_datos)
-
-    # Footer de la aplicación
-    st.markdown("""
-    <div class="footer">
-        © 2025 Instituto Geográfico Agustín Codazzi (IGAC) - Todos los derechos reservados | 
-        Sistema de Gestión de Solicitudes v2.0
-    </div>
-    """, unsafe_allow_html=True)
-    
 
 if __name__ == "__main__":
     main()
