@@ -30,9 +30,32 @@ def mostrar_login_dashboard():
                 else:
                     st.error("❌ Credenciales incorrectas")
 
+def cargar_credenciales_dashboard():
+    """Cargar credenciales del dashboard desde Streamlit secrets o fallback por defecto"""
+    try:
+        # Intentar cargar desde secrets
+        creds = dict(st.secrets.get("dashboard_credentials", {}))
+        if 'usuario' in creds and 'password' in creds:
+            return {
+                'usuario': creds['usuario'],
+                'password': creds['password']
+            }
+        return _obtener_credenciales_dashboard_defecto()
+    except Exception as e:
+        print(f"Advertencia: No se pudo cargar credenciales del dashboard desde secrets: {e}")
+        return _obtener_credenciales_dashboard_defecto()
+
+def _obtener_credenciales_dashboard_defecto():
+    """Credenciales por defecto del dashboard (fallback)"""
+    return {
+        'usuario': "Admin_IGAC_Solicitudes",
+        'password': "Solicitudes*5623"
+    }
+
 def autenticar_dashboard(usuario, password):
     """Autenticar credenciales del dashboard - un solo nivel de administrador"""
-    return usuario == "Admin_IGAC_Solicitudes" and password == "Solicitudes*5623"
+    creds_dashboard = cargar_credenciales_dashboard()
+    return usuario == creds_dashboard['usuario'] and password == creds_dashboard['password']
 
 def formatear_tiempo_dashboard(dias):
     """Formatear tiempo en días para el dashboard"""
