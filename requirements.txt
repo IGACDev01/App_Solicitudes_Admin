@@ -1,5 +1,5 @@
 # Core Streamlit and web framework
-streamlit>=1.28.0
+streamlit==1.32.0
 
 # Time zone handling
 pytz==2023.3
