@@ -9,26 +9,54 @@ from datetime import datetime, timedelta
 import io
 import xlsxwriter
 
-# Credenciales por proceso
-CREDENCIALES_ADMINISTRADORES = {
-    "Subdirección Administrativa y Financiera": {
-        "Almacén": {"usuario": "admin_almacen", "password": "Almacen3455*"},
-        "Archivo": {"usuario": "admin_archivo", "password": "Archivo4790*"},
-        "Contabilidad": {"usuario": "admin_contabilidad", "password": "Contable9865#"},
-        "Contractual": {"usuario": "admin_contractual", "password": "Contractual6518!"},
-        "Correspondencia": {"usuario": "admin_correspondencia", "password": "Correo3981$"},
-        "Infraestructura": {"usuario": "admin_infraestructura", "password": "Infraestructura2387!"},
-        "Operación Logística SAF": {"usuario": "admin_operacion", "password": "Logistica0978#"},
-        "Presupuesto": {"usuario": "admin_presupuesto", "password": "Presupuesto3425$"},
-        "Tesorería": {"usuario": "admin_tesoreria", "password": "Tesoreria9248!"},
-        "Tiquetes": {"usuario": "admin_tiquetes", "password": "Tiquetes9845$"},
-        "Transporte": {"usuario": "admin_transporte", "password": "Transporte5926*"}
-    },
-    "Oficina Asesora de Comunicaciones": {
-        "Comunicación Externa": {"usuario": "admin_com_externa", "password": "ComExt2024!"},
-        "Comunicación Interna": {"usuario": "admin_com_interna", "password": "ComInt2024!"}
+# Cargar credenciales desde Streamlit secrets
+def cargar_credenciales_administradores():
+    """Cargar credenciales desde Streamlit secrets o fallback a diccionario por defecto"""
+    try:
+        # Intentar cargar desde secrets
+        credenciales = dict(st.secrets.get("admin_credentials", {}))
+
+        # Convertir la estructura TOML a diccionario Python
+        credenciales_procesadas = {}
+        for area, procesos in credenciales.items():
+            credenciales_procesadas[area] = {}
+            for proceso, datos in procesos.items():
+                if isinstance(datos, dict) and 'usuario' in datos:
+                    credenciales_procesadas[area][proceso] = {
+                        'usuario': datos['usuario'],
+                        'password': datos['password']
+                    }
+
+        return credenciales_procesadas if credenciales_procesadas else _cargar_credenciales_defecto()
+
+    except Exception as e:
+        print(f"Advertencia: No se pudo cargar credenciales desde secrets: {e}")
+        return _cargar_credenciales_defecto()
+
+def _cargar_credenciales_defecto():
+    """Credenciales por defecto (fallback)"""
+    return {
+        "Subdirección Administrativa y Financiera": {
+            "Almacén": {"usuario": "admin_almacen", "password": "Almacen3455*"},
+            "Archivo": {"usuario": "admin_archivo", "password": "Archivo4790*"},
+            "Contabilidad": {"usuario": "admin_contabilidad", "password": "Contable9865#"},
+            "Contractual": {"usuario": "admin_contractual", "password": "Contractual6518!"},
+            "Correspondencia": {"usuario": "admin_correspondencia", "password": "Correo3981$"},
+            "Infraestructura": {"usuario": "admin_infraestructura", "password": "Infraestructura2387!"},
+            "Operación Logística SAF": {"usuario": "admin_operacion", "password": "Logistica0978#"},
+            "Presupuesto": {"usuario": "admin_presupuesto", "password": "Presupuesto3425$"},
+            "Tesorería": {"usuario": "admin_tesoreria", "password": "Tesoreria9248!"},
+            "Tiquetes": {"usuario": "admin_tiquetes", "password": "Tiquetes9845$"},
+            "Transporte": {"usuario": "admin_transporte", "password": "Transporte5926*"}
+        },
+        "Oficina Asesora de Comunicaciones": {
+            "Comunicación Externa": {"usuario": "admin_com_externa", "password": "ComExt2024!"},
+            "Comunicación Interna": {"usuario": "admin_com_interna", "password": "ComInt2024!"}
+        }
     }
-}
+
+# Cargar credenciales al iniciar
+CREDENCIALES_ADMINISTRADORES = cargar_credenciales_administradores()
 
 # Configuración de persistencia
 TIEMPO_PERSISTENCIA_EXPANDER = 300  # 5 minutos en segundos
