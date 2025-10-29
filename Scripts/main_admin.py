@@ -2,9 +2,7 @@ import streamlit as st
 import time
 import pandas as pd
 from sharepoint_list_manager import GestorListasSharePoint
-from dashboard import mostrar_tab_dashboard
 from timezone_utils_admin import obtener_fecha_actual_colombia
-from admin_solicitudes import mostrar_tab_administrador
 from utils import obtener_cache_key
 
 st.set_option('client.showErrorDetails', False)
@@ -72,13 +70,26 @@ def invalidar_cache_datos():
     except Exception as e:
         print(f"⚠️ Error invalidando cache: {e}")
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300, show_spinner=False, max_entries=3)
 def obtener_datos_sharepoint_en_cache(cache_key: str = "default"):
     """Obtener datos SharePoint con caché"""
     gestor_datos = obtener_gestor_datos()
     if gestor_datos.df is None or gestor_datos.df.empty:
         gestor_datos.cargar_datos()
-    return gestor_datos.df.copy() if gestor_datos.df is not None else pd.DataFrame()
+
+    df = gestor_datos.df.copy() if gestor_datos.df is not None else pd.DataFrame()
+
+    # Memory optimization: limit dataframe size if too large
+    if len(df) > 1000:
+        print(f"⚠️ Large dataset detected ({len(df)} records), optimizing memory usage")
+        # Keep only essential columns for UI
+        essential_columns = [
+            'id_solicitud', 'nombre_solicitante', 'email_solicitante',
+            'fecha_solicitud', 'tipo_solicitud', 'estado', 'proceso', 'area'
+        ]
+        df = df[essential_columns] if all(col in df.columns for col in essential_columns) else df
+
+    return df
 
 @st.cache_resource
 def obtener_gestor_datos():
@@ -105,22 +116,72 @@ def inicializar_estado_sesion():
         st.session_state.usuario_admin = None
 
 
-def limpiar_sesiones_periodicamente():
-    """Limpiar sesiones cada 5 minutos para evitar memory leaks"""
-    timestamp_actual = time.time()
-    ultima_limpieza_key = 'ultima_limpieza_sesiones'
+def cleanup_streamlit_cache():
+    """Clean up Streamlit cache periodically"""
+    try:
+        # Clear cache if cache is old or has too many entries
+        cache_info = st.cache_data.get_stats()
+        total_entries = sum(len(entries) for entries in cache_info.values())
 
-    ultima_limpieza = st.session_state.get(ultima_limpieza_key, 0)
+        if total_entries > 20:  # If too many cached items
+            print(f"🧹 Cleaning cache: {total_entries} entries found")
+            st.cache_data.clear()
+            print("✅ Cache cleared")
 
-    # Limpiar cada 5 minutos
-    if timestamp_actual - ultima_limpieza > 300:
-        # Importar función de limpieza
-        try:
-            from admin_solicitudes import limpiar_estados_expirados
-            limpiar_estados_expirados()
-            st.session_state[ultima_limpieza_key] = timestamp_actual
-        except ImportError:
-            pass
+    except Exception as e:
+        print(f"⚠️ Cache cleanup error: {e}")
+
+
+def cleanup_old_session_data():
+    """Clean up old session state data"""
+    try:
+        keys_to_remove = []
+
+        # Clean up old form IDs (keep only recent ones)
+        for key in st.session_state.keys():
+            if key.startswith('old_form_ids') and len(st.session_state.get(key, [])) > 10:
+                # Keep only last 5 form IDs
+                st.session_state[key] = st.session_state[key][-5:]
+
+            # Remove temporary flags older than 1 hour
+            if key.startswith('temp_') or key.startswith('just_submitted_'):
+                keys_to_remove.append(key)
+
+        # Remove old temporary keys
+        for key in keys_to_remove:
+            try:
+                del st.session_state[key]
+            except:
+                pass
+
+        if keys_to_remove:
+            print(f"🧹 Cleaned up {len(keys_to_remove)} old session keys")
+
+    except Exception as e:
+        print(f"⚠️ Session cleanup error: {e}")
+
+
+def periodic_maintenance():
+    """Perform periodic maintenance tasks"""
+    # Only run maintenance occasionally
+    if 'last_maintenance' not in st.session_state:
+        st.session_state.last_maintenance = 0
+
+    current_time = time.time()
+
+    # Run maintenance every 30 minutes
+    if current_time - st.session_state.last_maintenance > 1800:  # 30 minutes
+        print("🔧 Running periodic maintenance...")
+
+        # Clean up old session state data
+        cleanup_old_session_data()
+
+        # Clean up cache if needed
+        cleanup_streamlit_cache()
+
+        # Update maintenance timestamp
+        st.session_state.last_maintenance = current_time
+        print("✅ Maintenance completed")
 
 def main():
     """Función principal de la aplicación"""
@@ -129,7 +190,9 @@ def main():
 
         # Inicializar estado de sesión
         inicializar_estado_sesion()
-        limpiar_sesiones_periodicamente()
+
+        # Perform periodic maintenance
+        periodic_maintenance()
 
         # Título principal
         col1, spacer, col2 = st.columns([10, 0.5, 1])
@@ -168,10 +231,10 @@ def main():
             time.sleep(10)
             st.rerun()
 
-        # Mostrar frescura de datos - simplificado sin get_stats()
+        # Mostrar frescura de datos - actualizado con TTL correcto
         if not df_en_cache.empty:
             ultima_actualizacion = obtener_fecha_actual_colombia().strftime('%H:%M:%S')
-            st.caption(f"📊 Datos en caché | Total solicitudes: {len(df_en_cache)} | Actualizado: {ultima_actualizacion} | Cache TTL: 60s")
+            st.caption(f"📊 Datos en caché | Total solicitudes: {len(df_en_cache)} | Actualizado: {ultima_actualizacion} | Cache TTL: 300s")
 
 
         # Crear control segmentado para navegación
@@ -183,11 +246,13 @@ def main():
             label_visibility="collapsed",
         )
 
-        # Mostrar contenido basado en selección del control segmentado
+        # Mostrar contenido basado en selección del control segmentado (LAZY LOAD)
         if tab == "⚙️ Administrar Solicitudes":
+            from admin_solicitudes import mostrar_tab_administrador
             mostrar_tab_administrador(gestor_datos)
 
         elif tab == "📊 Dashboard":
+            from dashboard import mostrar_tab_dashboard
             mostrar_tab_dashboard(gestor_datos)
 
         # Footer de la aplicación

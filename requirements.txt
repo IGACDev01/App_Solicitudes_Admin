@@ -14,25 +14,6 @@ plotly>=5.15.0
 # HTTP requests and API calls
 requests>=2.31.0
 
-# Date and time handling
-python-dateutil>=2.8.0
-
-# Environment variables
-python-dotenv>=1.0.0
-
-# HTML parsing (for cleaning HTML content)
-beautifulsoup4>=4.12.0
-lxml>=4.9.0
-
-# Microsoft Graph API dependencies
-msal>=1.24.0
-
 # Excel file handling
 openpyxl>=3.1.0
 xlsxwriter>=3.1.0
-
-# Additional utilities
-uuid
-
-# Optional: For better performance
-pyarrow>=12.0.0
