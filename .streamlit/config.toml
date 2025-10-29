@@ -7,8 +7,6 @@ secondaryBackgroundColor="#f0f2f6"
 [server]
 enableXsrfProtection = false
 enableCORS = false
-maxUploadSize = 200
-enableDeployButton = false
 
 [browser]
 gatherUsageStats = false
@@ -17,15 +15,6 @@ serverAddress = "0.0.0.0"
 # Critical for fixing module loading issues
 [runner]
 fastReruns = false
-
-# Cache optimization for faster startup
-[client]
-showErrorDetails = false
-toolbarMode = "minimal"
-maxMessageSize = 2
-
-[logger]
-level = "warning"
 
 
  
