@@ -46,19 +46,13 @@ class GestorListasSharePoint:
         return True
 
     def _cargar_configuracion_graph(self) -> Dict[str, str]:
-        """Cargar configuración de Graph API desde el entorno"""
-        try:
-            from dotenv import load_dotenv
-            load_dotenv("Scripts/email.env")
-        except:
-            pass
-        
+        """Cargar configuración de Graph API desde Streamlit secrets"""
         return {
-            'tenant_id': os.getenv("TENANT_ID", ""),
-            'client_id': os.getenv("CLIENT_ID", ""),
-            'client_secret': os.getenv("CLIENT_SECRET", ""),
+            'tenant_id': st.secrets["TENANT_ID"],
+            'client_id': st.secrets["CLIENT_ID"],
+            'client_secret': st.secrets["CLIENT_SECRET"],
             'graph_url': "https://graph.microsoft.com/v1.0",
-            'sharepoint_site_url': os.getenv("SHAREPOINT_SITE_URL", "")
+            'sharepoint_site_url': st.secrets["SHAREPOINT_SITE_URL"]
         }
     
     def _obtener_token_acceso(self) -> Optional[str]:

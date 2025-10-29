@@ -1,7 +1,7 @@
 import requests
 from typing import Dict, Any, Optional
 import os
-from dotenv import load_dotenv
+import streamlit as st
 from timezone_utils_admin import obtener_fecha_actual_colombia, formatear_fecha_colombia
 
 URL_APLICACION = "https://appsolicitudes-h72izekvzacukoykxwnfqb.streamlit.app/"
@@ -9,18 +9,11 @@ URL_APLICACION = "https://appsolicitudes-h72izekvzacukoykxwnfqb.streamlit.app/"
 class GestorNotificacionesEmail:
     def __init__(self):
         """Inicializa el gestor de notificaciones por email"""
-        # Cargar variables de entorno
-        try:
-            load_dotenv("Scripts\\email.env")
-        except:
-            # El archivo no existe - usará secretos de Streamlit o variables de entorno
-            pass
-        
-        # Configuración de Microsoft Graph API
-        self.tenant_id = os.getenv("TENANT_ID", "")
-        self.client_id = os.getenv("CLIENT_ID", "")
-        self.client_secret = os.getenv("CLIENT_SECRET", "")
-        self.email_remitente = os.getenv("SENDER_EMAIL", "")
+        # Configuración de Microsoft Graph API desde Streamlit secrets
+        self.tenant_id = st.secrets["TENANT_ID"]
+        self.client_id = st.secrets["CLIENT_ID"]
+        self.client_secret = st.secrets["CLIENT_SECRET"]
+        self.email_remitente = st.secrets["SENDER_EMAIL"]
         
         # URLs de la API
         self.url_token = f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
