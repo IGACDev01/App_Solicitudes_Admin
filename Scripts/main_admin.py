@@ -119,14 +119,19 @@ def inicializar_estado_sesion():
 def cleanup_streamlit_cache():
     """Clean up Streamlit cache periodically"""
     try:
-        # Clear cache if cache is old or has too many entries
-        cache_info = st.cache_data.get_stats()
-        total_entries = sum(len(entries) for entries in cache_info.values())
+        # Try to clear cache if it exists
+        # Note: get_stats() may not be available in all Streamlit versions
+        try:
+            cache_info = st.cache_data.get_stats()
+            total_entries = sum(len(entries) for entries in cache_info.values())
 
-        if total_entries > 20:  # If too many cached items
-            print(f"🧹 Cleaning cache: {total_entries} entries found")
-            st.cache_data.clear()
-            print("✅ Cache cleared")
+            if total_entries > 20:  # If too many cached items
+                print(f"🧹 Cleaning cache: {total_entries} entries found")
+                st.cache_data.clear()
+                print("✅ Cache cleared")
+        except AttributeError:
+            # get_stats() not available, skip detailed cleanup
+            pass
 
     except Exception as e:
         print(f"⚠️ Cache cleanup error: {e}")
