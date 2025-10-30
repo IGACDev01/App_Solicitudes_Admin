@@ -310,8 +310,9 @@ def mostrar_tab_administrador(gestor_datos):
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
         if st.button("🔄 Actualizar Datos", key="actualizar_admin"):
+            # FIX: Only invalidate data cache, not resource cache (which includes gestor_datos)
             invalidar_y_actualizar_cache()
-            st.cache_resource.clear()
+            # Don't clear resource cache as it causes JavaScript reload issues
             st.rerun()
 
     with col2:
@@ -335,10 +336,15 @@ def mostrar_tab_administrador(gestor_datos):
 
     with col3:
         if st.button("🚪 Cerrar Sesión", key="cerrar_sesion_admin"):
+            # FIX: Clear only session state, not cache resources to avoid JavaScript issues
             st.session_state.admin_autenticado = False
             st.session_state.area_admin = None
             st.session_state.proceso_admin = None
             st.session_state.usuario_admin = None
+            # Clear any admin-specific session state
+            for key in list(st.session_state.keys()):
+                if key.startswith('pagina_actual') or key.startswith('filtros_'):
+                    del st.session_state[key]
             st.rerun()
 
     st.markdown("---")
