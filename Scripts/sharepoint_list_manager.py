@@ -387,16 +387,18 @@ class GestorListasSharePoint:
                         'descripcion': campos.get('Descripcion', ''),
                         'estado': campos.get('Estado', 'Asignada'),
                         'responsable_asignado': campos.get('ResponsableAsignado', ''),
+                        'email_responsable': campos.get('EmailResponsable', ''),
                         'fecha_actualizacion': self._normalizar_datetime(self._parsear_fecha(campos.get('FechaActualizacion'))),
                         'fecha_completado': self._normalizar_datetime(self._parsear_fecha(campos.get('FechaCompletado'))),
                         'comentarios_admin': campos.get('ComentariosAdmin', ''),
-                        'comentarios_usuario': campos.get('ComentariosUsuario', ''), 
+                        'comentarios_usuario': campos.get('ComentariosUsuario', ''),
                         'tiempo_respuesta_dias': campos.get('TiempoRespuestaDias', 0),
                         'tiempo_resolucion_dias': campos.get('TiempoResolucionDias', 0),
                         'sharepoint_id': item.get('id', ''),
                         'tiempo_pausado_dias': campos.get('TiempoPausadoDias', 0),
                         'fecha_pausa': self._normalizar_datetime(self._parsear_fecha(campos.get('FechaPausa'))),
-                        'historial_pausas': campos.get('HistorialPausas', '')
+                        'historial_pausas': campos.get('HistorialPausas', ''),
+                        'historial_estados': campos.get('HistorialEstados', '')
                     }
                     filas.append(fila)
                 
@@ -490,7 +492,7 @@ class GestorListasSharePoint:
             return None
     
     def actualizar_estado_solicitud(self, id_solicitud: str, nuevo_estado: str,
-                                responsable: str = "", comentarios: str = "", historial_estados: str = "") -> bool:
+                                responsable: str = "", comentarios: str = "", historial_estados: str = "", email_responsable: str = "") -> bool:
         """Actualizar estado de solicitud en Lista SharePoint con historial"""
         try:
             # Obtener estado anterior
@@ -525,6 +527,9 @@ class GestorListasSharePoint:
 
             if responsable:
                 datos_actualizacion['ResponsableAsignado'] = responsable
+
+            if email_responsable:
+                datos_actualizacion['EmailResponsable'] = email_responsable
 
             if comentarios:
                 datos_actualizacion['ComentariosAdmin'] = comentarios
@@ -785,10 +790,10 @@ class GestorListasSharePoint:
         return pd.DataFrame(columns=[
             'id_solicitud', 'territorial', 'nombre_solicitante', 'email_solicitante',
             'fecha_solicitud', 'tipo_solicitud', 'area', 'proceso', 'prioridad',
-            'descripcion', 'estado', 'responsable_asignado', 'fecha_actualizacion',
+            'descripcion', 'estado', 'responsable_asignado', 'email_responsable', 'fecha_actualizacion',
             'fecha_completado', 'comentarios_admin', 'comentarios_usuario',  # NEW FIELD
             'tiempo_respuesta_dias', 'tiempo_resolucion_dias', 'sharepoint_id',
-            'tiempo_pausado_dias', 'fecha_pausa', 'historial_pausas'
+            'tiempo_pausado_dias', 'fecha_pausa', 'historial_pausas', 'historial_estados'
         ])
     
     def obtener_todas_solicitudes(self) -> pd.DataFrame:

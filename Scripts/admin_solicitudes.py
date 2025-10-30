@@ -1418,7 +1418,8 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
                 nuevo_estado,
                 responsable,
                 comentarios_finales,
-                historial_estados  # Pass the state history
+                historial_estados,  # Pass the state history
+                email_responsable  # Pass the responsible email
             )
 
             if not exito_estado:
