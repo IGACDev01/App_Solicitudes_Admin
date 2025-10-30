@@ -311,8 +311,9 @@ def mostrar_tab_administrador(gestor_datos):
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
         if st.button("🔄 Actualizar Datos", key="actualizar_admin"):
+            # FIX: Only invalidate data cache, not resource cache to avoid JavaScript sync issues
             invalidar_y_actualizar_cache()
-            st.cache_resource.clear()
+            # Don't clear resource cache - it causes the app to reload JavaScript
             st.rerun()
 
     with col2:
