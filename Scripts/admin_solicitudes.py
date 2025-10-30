@@ -311,10 +311,25 @@ def mostrar_tab_administrador(gestor_datos):
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
         if st.button("🔄 Actualizar Datos", key="actualizar_admin"):
-            # FIX: Only invalidate data cache, not resource cache to avoid JavaScript sync issues
-            invalidar_y_actualizar_cache()
-            # Don't clear resource cache - it causes the app to reload JavaScript
-            st.rerun()
+            # FIX: Force reload from SharePoint
+            with st.spinner("🔄 Actualizando datos desde SharePoint..."):
+                try:
+                    # Clear data cache
+                    st.cache_data.clear()
+
+                    # Force gestor_datos to reload from SharePoint
+                    gestor_datos.cargar_datos(forzar_recarga=True)
+
+                    # Update cache key
+                    invalidar_y_actualizar_cache()
+
+                    st.success("✅ Datos actualizados correctamente!")
+                    # Don't use st.rerun() - just reload via callback
+                    st.session_state['datos_actualizados'] = obtener_fecha_actual_colombia()
+
+                except Exception as e:
+                    st.error(f"❌ Error al actualizar: {e}")
+                    print(f"Error detallado: {e}")
 
     with col2:
         # Botón de exportación a Excel
