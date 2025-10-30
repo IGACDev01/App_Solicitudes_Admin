@@ -1,9 +1,46 @@
 # Streamlit secrets (keep this local only)
 .streamlit/secrets.toml
 
-#Ignore all the Scraper folder
+# Scraper folder
 /Scraper/**
+
+# App wake-up scheduler (automation script - local only)
+Scripts/app_wake_up_scheduler.py
+app_wake_up.log
+app_wake_up_*.log
 
 # Environment files
 Scripts/email.env
 *.env
+
+# Python environment and cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+.venv/
+env/
+venv/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -311,9 +311,25 @@ def mostrar_tab_administrador(gestor_datos):
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
         if st.button("🔄 Actualizar Datos", key="actualizar_admin"):
-            invalidar_y_actualizar_cache()
-            st.cache_resource.clear()
-            st.rerun()
+            # FIX: Force reload from SharePoint
+            with st.spinner("🔄 Actualizando datos desde SharePoint..."):
+                try:
+                    # Clear data cache
+                    st.cache_data.clear()
+
+                    # Force gestor_datos to reload from SharePoint
+                    gestor_datos.cargar_datos(forzar_recarga=True)
+
+                    # Update cache key
+                    invalidar_y_actualizar_cache()
+
+                    st.success("✅ Datos actualizados correctamente!")
+                    # Don't use st.rerun() - just reload via callback
+                    st.session_state['datos_actualizados'] = obtener_fecha_actual_colombia()
+
+                except Exception as e:
+                    st.error(f"❌ Error al actualizar: {e}")
+                    print(f"Error detallado: {e}")
 
     with col2:
         # Botón de exportación a Excel
@@ -880,6 +896,19 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
             comentario_usuario_limpio = limpiar_contenido_html(comentarios_usuario)
             st.success(f"**Comentarios del usuario:** {comentario_usuario_limpio}")
 
+        # === HISTORIAL DE CAMBIOS DE ESTADO ===
+        st.markdown("---")
+        st.markdown("**📊 Historial de Cambios de Estado**")
+
+        historial_estados = solicitud.get('historial_estados', '')
+        if historial_estados and str(historial_estados).strip():
+            # Display formatted state history
+            historial_formateado = StateHistoryTracker.format_history_for_display(historial_estados)
+            with st.expander("Ver historial completo de estados", expanded=False):
+                st.markdown(historial_formateado)
+        else:
+            st.info("📭 Sin historial de cambios de estado registrado")
+
         # === HISTORIAL DE PAUSAS (pesado) ===
         if datos_cache['historial_pausas'] is None:
             historial_pausas = solicitud.get('historial_pausas', '')
@@ -1028,18 +1057,35 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
 
         st.markdown("---")
 
+        # === STATE FLOW GUIDE ===
+        st.markdown("**🔄 Flujo de Estados Permitidos**")
+
+        # Get allowed transitions for current state
+        validator = StateFlowValidator()
+        estado_actual = solicitud['estado']
+        estados_permitidos = validator.get_allowed_transitions(estado_actual)
+
+        if estados_permitidos:
+            estados_str = ", ".join(estados_permitidos)
+            st.info(f"✅ Desde '{estado_actual}' puede cambiar a: **{estados_str}**")
+        else:
+            st.warning(f"⚠️ '{estado_actual}' es un estado terminal. No se puede cambiar a otro estado.")
+
         # === FORMULARIO DE GESTIÓN (ligero) ===
         with st.form(f"gestionar_{solicitud['id_solicitud']}"):
             col1, col2 = st.columns(2)
 
             with col1:
-                nuevo_estado = st.selectbox(
-                    "Estado:",
-                    options=["Asignada", "En Proceso", "Incompleta", "Completada", "Cancelada"],
-                    index=["Asignada", "En Proceso", "Incompleta", "Completada", "Cancelada"].index(
-                        solicitud['estado']),
-                    key=f"estado_{solicitud['id_solicitud']}"
-                )
+                # Only show allowed transitions
+                if estados_permitidos:
+                    nuevo_estado = st.selectbox(
+                        "Cambiar Estado a:",
+                        options=estados_permitidos,
+                        key=f"estado_{solicitud['id_solicitud']}"
+                    )
+                else:
+                    st.write(f"**Estado:** {estado_actual} (Terminal - No se puede cambiar)")
+                    nuevo_estado = estado_actual
 
                 prioridad_actual = solicitud.get('prioridad', 'Media')
                 nueva_prioridad = st.selectbox(
@@ -1356,7 +1402,7 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
             if archivos_subidos:
                 cambios['archivos'] = {'new': archivos_subidos}
 
-        # Paso 4: Enviar notificaciones al solicitante solo si se solicita y ocurrieron cambios
+        # Paso 5: Enviar notificaciones al solicitante solo si se solicita y ocurrieron cambios
         email_enviado = False
         if notificar_solicitante and cambios:
             try:
@@ -1379,7 +1425,7 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
             except Exception as e:
                 print(f"Error en notificación por email: {e}")
 
-        # Paso 4b: Notificación opcional al responsable
+        # Paso 5b: Notificación opcional al responsable
         email_responsable_enviado = False
         if notificar_responsable and email_responsable and email_responsable.strip() and cambios:
             try:
@@ -1400,7 +1446,7 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
             except Exception as e:
                 print(f"Error en notificación de responsable: {e}")
 
-        # Paso 5: Recargar datos y mostrar éxito
+        # Paso 6: Recargar datos y mostrar éxito
         gestor_datos.cargar_datos(forzar_recarga=True)
 
         # Borrar cache y forzar actualización
