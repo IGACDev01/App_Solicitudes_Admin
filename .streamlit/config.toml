@@ -5,6 +5,7 @@ primaryColor="#006AB3"
 secondaryBackgroundColor="#f0f2f6"
 
 [server]
+fileWatcherType = "none"
 enableXsrfProtection = false
 enableCORS = false
 
