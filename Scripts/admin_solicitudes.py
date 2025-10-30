@@ -1095,11 +1095,24 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                     key=f"prioridad_{solicitud['id_solicitud']}"
                 )
 
-                responsable = st.text_input(
-                    "Responsable adicional:",
-                    value=solicitud.get('responsable_asignado', ''),
-                    key=f"responsable_{solicitud['id_solicitud']}"
-                )
+                responsable_actual = solicitud.get('responsable_asignado', '')
+
+                # If responsable is already assigned, show it locked and disabled
+                if responsable_actual:
+                    st.text_input(
+                        "Responsable asignado:",
+                        value=responsable_actual,
+                        disabled=True,
+                        key=f"responsable_display_{solicitud['id_solicitud']}"
+                    )
+                    responsable = responsable_actual
+                else:
+                    responsable = st.text_input(
+                        "Asignar responsable:",
+                        value="",
+                        placeholder="Nombre del responsable",
+                        key=f"responsable_{solicitud['id_solicitud']}"
+                    )
 
             with col2:
                 nuevo_comentario = st.text_area(
@@ -1109,11 +1122,23 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
                     key=f"comentarios_{solicitud['id_solicitud']}"
                 )
 
-                email_responsable = st.text_input(
-                    "Email responsable adicional:",
-                    placeholder="responsable@igac.gov.co",
-                    key=f"email_resp_{solicitud['id_solicitud']}"
-                )
+                email_responsable_actual = solicitud.get('email_responsable', '')
+
+                # If email responsable is already assigned, show it locked and disabled
+                if email_responsable_actual:
+                    st.text_input(
+                        "Email responsable asignado:",
+                        value=email_responsable_actual,
+                        disabled=True,
+                        key=f"email_resp_display_{solicitud['id_solicitud']}"
+                    )
+                    email_responsable = email_responsable_actual
+                else:
+                    email_responsable = st.text_input(
+                        "Email responsable adicional:",
+                        placeholder="responsable@igac.gov.co",
+                        key=f"email_resp_{solicitud['id_solicitud']}"
+                    )
 
             # Subida de archivos
             archivos_nuevos = st.file_uploader(

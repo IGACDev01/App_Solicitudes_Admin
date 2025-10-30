@@ -4,7 +4,7 @@ import os
 import streamlit as st
 from timezone_utils_admin import obtener_fecha_actual_colombia, formatear_fecha_colombia
 
-URL_APLICACION = "https://appsolicitudes-h72izekvzacukoykxwnfqb.streamlit.app/"
+URL_APLICACION = "https://igac-requests-control-panel.streamlit.app/"
 
 class GestorNotificacionesEmail:
     def __init__(self):
