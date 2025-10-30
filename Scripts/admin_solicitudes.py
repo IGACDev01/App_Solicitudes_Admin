@@ -4,7 +4,6 @@ from email_manager import GestorNotificacionesEmail
 import plotly.graph_objects as go
 from timezone_utils_admin import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
 from utils import (invalidar_y_actualizar_cache, calcular_incompletas_con_tiempo_real, calcular_tiempo_pausa_solicitud_individual)
-from state_flow_manager import StateFlowValidator, StateHistoryTracker, validate_and_get_transition_message
 import time
 from datetime import datetime, timedelta
 import io
@@ -886,19 +885,6 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
             comentario_usuario_limpio = limpiar_contenido_html(comentarios_usuario)
             st.success(f"**Comentarios del usuario:** {comentario_usuario_limpio}")
 
-        # === HISTORIAL DE CAMBIOS DE ESTADO ===
-        st.markdown("---")
-        st.markdown("**📊 Historial de Cambios de Estado**")
-
-        historial_estados = solicitud.get('historial_estados', '')
-        if historial_estados and str(historial_estados).strip():
-            # Display formatted state history
-            historial_formateado = StateHistoryTracker.format_history_for_display(historial_estados)
-            with st.expander("Ver historial completo de estados", expanded=False):
-                st.markdown(historial_formateado)
-        else:
-            st.info("📭 Sin historial de cambios de estado registrado")
-
         # === HISTORIAL DE PAUSAS (pesado) ===
         if datos_cache['historial_pausas'] is None:
             historial_pausas = solicitud.get('historial_pausas', '')
@@ -1047,35 +1033,18 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
 
         st.markdown("---")
 
-        # === STATE FLOW GUIDE ===
-        st.markdown("**🔄 Flujo de Estados Permitidos**")
-
-        # Get allowed transitions for current state
-        validator = StateFlowValidator()
-        estado_actual = solicitud['estado']
-        estados_permitidos = validator.get_allowed_transitions(estado_actual)
-
-        if estados_permitidos:
-            estados_str = ", ".join(estados_permitidos)
-            st.info(f"✅ Desde '{estado_actual}' puede cambiar a: **{estados_str}**")
-        else:
-            st.warning(f"⚠️ '{estado_actual}' es un estado terminal. No se puede cambiar a otro estado.")
-
         # === FORMULARIO DE GESTIÓN (ligero) ===
         with st.form(f"gestionar_{solicitud['id_solicitud']}"):
             col1, col2 = st.columns(2)
 
             with col1:
-                # Only show allowed transitions
-                if estados_permitidos:
-                    nuevo_estado = st.selectbox(
-                        "Cambiar Estado a:",
-                        options=estados_permitidos,
-                        key=f"estado_{solicitud['id_solicitud']}"
-                    )
-                else:
-                    st.write(f"**Estado:** {estado_actual} (Terminal - No se puede cambiar)")
-                    nuevo_estado = estado_actual
+                nuevo_estado = st.selectbox(
+                    "Estado:",
+                    options=["Asignada", "En Proceso", "Incompleta", "Completada", "Cancelada"],
+                    index=["Asignada", "En Proceso", "Incompleta", "Completada", "Cancelada"].index(
+                        solicitud['estado']),
+                    key=f"estado_{solicitud['id_solicitud']}"
+                )
 
                 prioridad_actual = solicitud.get('prioridad', 'Media')
                 nueva_prioridad = st.selectbox(
@@ -1280,17 +1249,15 @@ def mostrar_archivos_adjuntos_administrador(gestor_datos, id_solicitud):
 def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuevo_estado, nueva_prioridad,
                                                    responsable, email_responsable, nuevo_comentario,
                                                    notificar_solicitante, notificar_responsable, archivos_nuevos=None):
-    """Proceso de actualización simplificado y confiable con validación de flujo de estado"""
+    """Proceso de actualización simplificado y confiable"""
 
     try:
-        # Validación de transiciones de estado usando el nuevo flujo
+        # Validación de transiciones de estado:
         estado_actual = solicitud['estado']
 
-        # Validate state transition
-        is_valid, mensaje = validate_and_get_transition_message(estado_actual, nuevo_estado)
-
-        if not is_valid:
-            st.error(mensaje)
+        # Validar transición a Completada desde Incompleta
+        if estado_actual == 'Incompleta' and nuevo_estado == 'Completada':
+            st.error("❌ No se puede completar una solicitud incompleta. Primero reanúdela cambiando a 'En Proceso'.")
             return False
 
         # Rastrear qué cambió realmente
@@ -1337,20 +1304,7 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
                     f"{autor} (Sistema)"
                 )
 
-        # Paso 3: Actualizar historial de estados si hay cambio de estado
-        historial_estados = solicitud.get('historial_estados', '')
-        usuario_admin = st.session_state.get('usuario_admin', 'Admin')
-
-        if 'estado' in cambios:
-            # Add new state to history with timestamp
-            historial_estados = StateHistoryTracker.add_to_history(
-                historial_estados,
-                nuevo_estado,
-                usuario_admin,
-                nuevo_comentario if nuevo_comentario and nuevo_comentario.strip() else ""
-            )
-
-        # Paso 4: Actualizar en SharePoint (transacción única)
+        # Paso 3: Actualizar en SharePoint (transacción única)
         with st.spinner("🔄 Actualizando solicitud..."):
 
             # Actualizar prioridad si cambió
@@ -1361,13 +1315,12 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
                     st.error("❌ Error al actualizar prioridad")
                     return False
 
-            # Actualizar estado, comentarios e historial
+            # Actualizar estado y comentarios
             exito_estado = gestor_datos.actualizar_estado_solicitud(
                 solicitud['id_solicitud'],
                 nuevo_estado,
                 responsable,
-                comentarios_finales,
-                historial_estados  # Pass the state history
+                comentarios_finales
             )
 
             if not exito_estado:
@@ -1392,7 +1345,7 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
             if archivos_subidos:
                 cambios['archivos'] = {'new': archivos_subidos}
 
-        # Paso 5: Enviar notificaciones al solicitante solo si se solicita y ocurrieron cambios
+        # Paso 4: Enviar notificaciones al solicitante solo si se solicita y ocurrieron cambios
         email_enviado = False
         if notificar_solicitante and cambios:
             try:
@@ -1415,7 +1368,7 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
             except Exception as e:
                 print(f"Error en notificación por email: {e}")
 
-        # Paso 5b: Notificación opcional al responsable
+        # Paso 4b: Notificación opcional al responsable
         email_responsable_enviado = False
         if notificar_responsable and email_responsable and email_responsable.strip() and cambios:
             try:
@@ -1436,7 +1389,7 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
             except Exception as e:
                 print(f"Error en notificación de responsable: {e}")
 
-        # Paso 6: Recargar datos y mostrar éxito
+        # Paso 5: Recargar datos y mostrar éxito
         gestor_datos.cargar_datos(forzar_recarga=True)
 
         # Borrar cache y forzar actualización

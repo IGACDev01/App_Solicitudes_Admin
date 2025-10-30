@@ -483,15 +483,15 @@ class GestorListasSharePoint:
             print(f"Error agregando solicitud a lista SharePoint: {e}")
             return None
     
-    def actualizar_estado_solicitud(self, id_solicitud: str, nuevo_estado: str,
-                                responsable: str = "", comentarios: str = "", historial_estados: str = "") -> bool:
-        """Actualizar estado de solicitud en Lista SharePoint con historial"""
+    def actualizar_estado_solicitud(self, id_solicitud: str, nuevo_estado: str, 
+                                responsable: str = "", comentarios: str = "") -> bool:
+        """Actualizar estado de solicitud en Lista SharePoint"""
         try:
             # Obtener estado anterior
             solicitud_actual = self.obtener_solicitud_por_id(id_solicitud)
             if solicitud_actual.empty:
                 return False
-
+            
             estado_anterior = solicitud_actual.iloc[0]['estado']
             
             # Gestionar pausas/reanudaciones
@@ -516,16 +516,12 @@ class GestorListasSharePoint:
                 'Estado': nuevo_estado,
                 'FechaActualizacion': tiempo_actual_utc
             }
-
+            
             if responsable:
                 datos_actualizacion['ResponsableAsignado'] = responsable
-
+            
             if comentarios:
                 datos_actualizacion['ComentariosAdmin'] = comentarios
-
-            # Add state history if provided
-            if historial_estados:
-                datos_actualizacion['HistorialEstados'] = historial_estados
             
             # Manejar Completada
             if nuevo_estado == 'Completada':
