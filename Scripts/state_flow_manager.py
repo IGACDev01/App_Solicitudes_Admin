@@ -99,12 +99,9 @@ class StateHistoryTracker:
         responsable: str = "Admin",
         comentario: str = ""
     ) -> str:
-        """Create a single history entry for a state change"""
+        """Create a single history entry for a state change - only includes state and timestamp"""
         timestamp = obtener_fecha_actual_colombia().strftime('%d/%m/%Y %H:%M:%S COT')
-        entry = f"[{timestamp}] Estado: '{nuevo_estado}' | Responsable: {responsable}"
-        if comentario and comentario.strip():
-            comentario_limpio = comentario.strip()[:100]
-            entry += f" | Nota: {comentario_limpio}"
+        entry = f"[{timestamp}] {nuevo_estado}"
         return entry
 
     @staticmethod
@@ -120,7 +117,7 @@ class StateHistoryTracker:
         )
 
         if historial_actual and str(historial_actual).strip():
-            return f"{historial_actual}\n\n{nueva_entrada}"
+            return f"{historial_actual}\n{nueva_entrada}"
         else:
             return nueva_entrada
 
@@ -132,31 +129,22 @@ class StateHistoryTracker:
 
         entries = []
         historia_limpia = str(historial).strip()
-        bloques = historia_limpia.split('\n\n')
+        bloques = historia_limpia.split('\n')
 
         for bloque in bloques:
             if not bloque.strip():
                 continue
 
             try:
-                partes = bloque.split(' | ')
-                timestamp_estado = partes[0] if len(partes) > 0 else ""
-                responsable = partes[1].replace('Responsable: ', '') if len(partes) > 1 else "Unknown"
-                nota = partes[2].replace('Nota: ', '') if len(partes) > 2 else ""
+                # New format: [DD/MM/YYYY HH:MM:SS COT] Estado
+                if bloque.startswith('[') and ']' in bloque:
+                    timestamp_part = bloque.split('] ')[0] + ']'
+                    estado_part = bloque.split('] ', 1)[1] if '] ' in bloque else ""
 
-                estado_match = ""
-                if "Estado: '" in timestamp_estado:
-                    estado_match = timestamp_estado.split("Estado: '")[1].split("'")[0]
-                    timestamp = timestamp_estado.split('] ')[0] + ']'
-                else:
-                    timestamp = timestamp_estado
-
-                entries.append({
-                    "timestamp": timestamp,
-                    "estado": estado_match,
-                    "responsable": responsable.strip(),
-                    "nota": nota.strip()
-                })
+                    entries.append({
+                        "timestamp": timestamp_part,
+                        "estado": estado_part.strip()
+                    })
 
             except Exception as e:
                 print(f"Error parsing history entry: {e}")
@@ -192,13 +180,7 @@ class StateHistoryTracker:
 
         for i, entry in enumerate(reversed(entries)):
             emoji = emoji_map.get(entry['estado'], '📋')
-            formatted += f"{i+1}. {emoji} **{entry['estado']}** - {entry['timestamp']}\n"
-            formatted += f"   👤 {entry['responsable']}"
-
-            if entry['nota']:
-                formatted += f" | 📝 {entry['nota']}"
-
-            formatted += "\n\n"
+            formatted += f"{i+1}. {emoji} **{entry['estado']}** - {entry['timestamp']}\n\n"
 
         return formatted
 

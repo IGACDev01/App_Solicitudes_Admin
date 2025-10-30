@@ -459,10 +459,16 @@ class GestorListasSharePoint:
                 }
             }
             
+            # Agregar HistorialEstados - registrar estado inicial
+            from timezone_utils_admin import obtener_fecha_actual_colombia
+            timestamp_inicial = obtener_fecha_actual_colombia().strftime('%d/%m/%Y %H:%M:%S COT')
+            historial_inicial = f"[{timestamp_inicial}] Asignada"
+            elemento_lista['fields']['HistorialEstados'] = historial_inicial
+
             # Agregar campos opcionales
             if datos_solicitud.get('fecha_limite'):
                 elemento_lista['fields']['FechaNecesaria'] = datos_solicitud['fecha_limite'].isoformat()
-            
+
             # Crear elemento de lista
             url_crear = f"{self.configuracion_graph['graph_url']}/sites/{self.id_sitio_sharepoint}/lists/{self.id_lista}/items"
             

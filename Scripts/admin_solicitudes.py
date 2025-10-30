@@ -241,14 +241,14 @@ def formatear_comentarios_administrador_para_mostrar(comentarios):
     """Formatear comentarios administrativos para visualización en panel de administración"""
     if not comentarios or not comentarios.strip():
         return "Sin comentarios previos"
-    
+
     # Limpiar contenido HTML primero
     comentarios_limpios = limpiar_contenido_html(comentarios)
-    
+
     # Dividir por dobles saltos de línea (separadores de comentarios)
     lista_comentarios = comentarios_limpios.split('\n\n')
     comentarios_html = []
-    
+
     for comentario in lista_comentarios:
         if comentario.strip():
             # Parsear timestamp y autor si están disponibles
@@ -261,8 +261,49 @@ def formatear_comentarios_administrador_para_mostrar(comentarios):
                     comentarios_html.append(comentario)
             else:
                 comentarios_html.append(comentario)
-    
+
     return '\n\n'.join(comentarios_html)
+
+
+def mostrar_exito_actualizacion(gestor_datos, proceso_admin):
+    """Mostrar página de éxito después de actualizar solicitud"""
+    # Get success data from session state
+    exito_data = st.session_state.get('datos_exito_actualizacion', {})
+
+    st.markdown("---")
+
+    # Success message with brief summary
+    st.success("✅ ¡Solicitud Actualizada Exitosamente!")
+
+    # Display summary
+    st.subheader("📋 Resumen de la Actualización")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.write(f"**ID Solicitud:** {exito_data.get('id_solicitud', 'N/A')}")
+        st.write(f"**Solicitante:** {exito_data.get('nombre_solicitante', 'N/A')}")
+        st.write(f"**Tipo:** {exito_data.get('tipo_solicitud', 'N/A')}")
+
+    with col2:
+        st.write(f"**Nuevo Estado:** {exito_data.get('nuevo_estado', 'N/A')}")
+        st.write(f"**Prioridad:** {exito_data.get('nueva_prioridad', 'N/A')}")
+        st.write(f"**Responsable:** {exito_data.get('responsable', 'N/A')}")
+
+    # Show changes made
+    if exito_data.get('cambios'):
+        st.write("**Cambios Realizados:**")
+        for cambio in exito_data['cambios']:
+            st.write(f"• {cambio}")
+
+    st.markdown("---")
+
+    # Button to continue updating another request
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🔄 Actualizar Otra Solicitud", use_container_width=True, key="volver_a_actualizar"):
+            st.session_state.mostrar_exito_actualizacion = False
+            st.session_state.datos_exito_actualizacion = {}
+            st.rerun()
 
 
 def mostrar_tab_administrador(gestor_datos):
@@ -358,6 +399,11 @@ def mostrar_tab_administrador(gestor_datos):
             st.rerun()
 
     st.markdown("---")
+
+    # Check if we're showing success message after update
+    if st.session_state.get('mostrar_exito_actualizacion', False):
+        mostrar_exito_actualizacion(gestor_datos, proceso_admin)
+        return
 
     # Obtener datos del proceso
     df = obtener_solicitudes_del_proceso(gestor_datos, proceso_admin)
@@ -894,35 +940,6 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
             st.markdown("**👤 Comentarios Adicionales del Usuario**")
             comentario_usuario_limpio = limpiar_contenido_html(comentarios_usuario)
             st.success(f"**Comentarios del usuario:** {comentario_usuario_limpio}")
-
-        # === HISTORIAL DE CAMBIOS DE ESTADO ===
-        st.markdown("---")
-        st.markdown("**📊 Historial de Cambios de Estado**")
-
-        historial_estados = solicitud.get('historial_estados', '')
-        if historial_estados and str(historial_estados).strip():
-            # Display formatted state history
-            historial_formateado = StateHistoryTracker.format_history_for_display(historial_estados)
-            with st.expander("Ver historial completo de estados", expanded=False):
-                st.markdown(historial_formateado)
-        else:
-            st.info("📭 Sin historial de cambios de estado registrado")
-
-        # === HISTORIAL DE PAUSAS (pesado) ===
-        if datos_cache['historial_pausas'] is None:
-            historial_pausas = solicitud.get('historial_pausas', '')
-            datos_cache['historial_pausas'] = historial_pausas
-
-        if datos_cache['historial_pausas'] and datos_cache['historial_pausas'].strip():
-            st.markdown("---")
-            with st.expander("⏸️ Ver historial de pausas", expanded=False):
-                st.text_area(
-                    "Pausas:",
-                    value=datos_cache['historial_pausas'],
-                    height=100,
-                    disabled=True,
-                    key=f"pausas_{solicitud['id_solicitud']}"
-                )
 
         # === ARCHIVOS ADJUNTOS PERSISTENTES ===
         st.markdown("---")
@@ -1476,51 +1493,41 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
         # Borrar cache y forzar actualización
         invalidar_y_actualizar_cache()
 
-        # Mostrar mensaje de éxito limpio
-        st.success(f"✅ Solicitud {solicitud['id_solicitud']} actualizada correctamente")
-
-        if cambios:
-            textos_cambios = []
-            if 'estado' in cambios:
-                textos_cambios.append(f"Estado: {cambios['estado']['new']}")
-            if 'prioridad' in cambios:
-                textos_cambios.append(f"Prioridad: {cambios['prioridad']['new']}")
-            if 'responsable' in cambios:
-                textos_cambios.append(f"Responsable: {cambios['responsable']['new']}")
-            if 'comentario' in cambios:
-                textos_cambios.append("Nuevo comentario agregado")
-            if 'archivos' in cambios:
-                textos_cambios.append(f"{len(cambios['archivos']['new'])} archivo(s) subido(s)")
-
-            if email_enviado:
-                textos_cambios.append("Notificación enviada al solicitante")
-
-            if email_responsable_enviado:
-                textos_cambios.append(f"Notificación enviada a {email_responsable}")
-
-            st.info("🔄 Cambios: " + " | ".join(textos_cambios))
-
-        # Mantener expander abierto después de actualización
-        mantener_estado_expander_persistente(solicitud['id_solicitud'], forzar_abierto=True, accion='actualizacion')
-
-        # Invalidar cache de archivos si se subieron nuevos
+        # Construir lista de cambios para mostrar
+        cambios_texto = []
+        if 'estado' in cambios:
+            cambios_texto.append(f"Estado: {cambios['estado']['new']}")
+        if 'prioridad' in cambios:
+            cambios_texto.append(f"Prioridad: {cambios['prioridad']['new']}")
+        if 'responsable' in cambios:
+            cambios_texto.append(f"Responsable: {cambios['responsable']['new']}")
+        if 'comentario' in cambios:
+            cambios_texto.append("Nuevo comentario agregado")
         if 'archivos' in cambios:
-            archivos_cache_key = f"archivos_{solicitud['id_solicitud']}"
-            if archivos_cache_key in st.session_state.get('archivos_cache_persistente', {}):
-                del st.session_state.archivos_cache_persistente[archivos_cache_key]
+            cambios_texto.append(f"{len(cambios['archivos']['new'])} archivo(s) subido(s)")
 
-        # Marcar para retroalimentación de UI
-        st.session_state[f'actualizado_recientemente_{solicitud["id_solicitud"]}'] = {
-            'timestamp': obtener_fecha_actual_colombia(),
-            'nuevo_estado': nuevo_estado
+        if email_enviado:
+            cambios_texto.append("Notificación enviada al solicitante")
+
+        if email_responsable_enviado:
+            cambios_texto.append(f"Notificación enviada a {email_responsable}")
+
+        # Guardar datos de éxito en session state para mostrar después
+        st.session_state.datos_exito_actualizacion = {
+            'id_solicitud': solicitud['id_solicitud'],
+            'nombre_solicitante': solicitud['nombre_solicitante'],
+            'tipo_solicitud': solicitud['tipo_solicitud'],
+            'nuevo_estado': nuevo_estado,
+            'nueva_prioridad': nueva_prioridad,
+            'responsable': responsable or solicitud.get('responsable_asignado', ''),
+            'cambios': cambios_texto
         }
 
-        # Incrementar contador de comentarios para forzar nuevo widget
-        if nuevo_comentario and nuevo_comentario.strip():
-            clave_contador = f'contador_comentario_{solicitud["id_solicitud"]}'
-            contador_actual = st.session_state.get(clave_contador, 0)
-            st.session_state[clave_contador] = contador_actual + 1
-            st.rerun()
+        # Set flag to show success screen
+        st.session_state.mostrar_exito_actualizacion = True
+
+        # Rerun to show success screen
+        st.rerun()
 
         return True
 
