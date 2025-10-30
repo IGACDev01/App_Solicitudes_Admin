@@ -72,29 +72,24 @@ def invalidar_cache_datos():
 
 @st.cache_data(ttl=300, show_spinner=False, max_entries=3)
 def obtener_datos_sharepoint_en_cache(cache_key: str = "default"):
-    """Obtener datos SharePoint con caché - con mejor manejo de cold starts"""
-    try:
-        gestor_datos = obtener_gestor_datos()
-        if gestor_datos.df is None or gestor_datos.df.empty:
-            gestor_datos.cargar_datos()
+    """Obtener datos SharePoint con caché"""
+    gestor_datos = obtener_gestor_datos()
+    if gestor_datos.df is None or gestor_datos.df.empty:
+        gestor_datos.cargar_datos()
 
-        df = gestor_datos.df.copy() if gestor_datos.df is not None else pd.DataFrame()
+    df = gestor_datos.df.copy() if gestor_datos.df is not None else pd.DataFrame()
 
-        # Memory optimization: limit dataframe size if too large
-        if len(df) > 1000:
-            print(f"⚠️ Large dataset detected ({len(df)} records), optimizing memory usage")
-            # Keep only essential columns for UI
-            essential_columns = [
-                'id_solicitud', 'nombre_solicitante', 'email_solicitante',
-                'fecha_solicitud', 'tipo_solicitud', 'estado', 'proceso', 'area'
-            ]
-            df = df[essential_columns] if all(col in df.columns for col in essential_columns) else df
+    # Memory optimization: limit dataframe size if too large
+    if len(df) > 1000:
+        print(f"⚠️ Large dataset detected ({len(df)} records), optimizing memory usage")
+        # Keep only essential columns for UI
+        essential_columns = [
+            'id_solicitud', 'nombre_solicitante', 'email_solicitante',
+            'fecha_solicitud', 'tipo_solicitud', 'estado', 'proceso', 'area'
+        ]
+        df = df[essential_columns] if all(col in df.columns for col in essential_columns) else df
 
-        return df
-    except Exception as e:
-        print(f"⚠️ Error loading cache data: {e}")
-        # Return empty dataframe instead of failing to prevent JavaScript sync issues
-        return pd.DataFrame()
+    return df
 
 @st.cache_resource
 def obtener_gestor_datos():
@@ -237,17 +232,9 @@ def main():
         if not estado['sharepoint_conectado']:
             error_msg = estado.get('error_mensaje', 'Error de conexión desconocido')
             st.error(f"❌ SharePoint: {error_msg}")
-            st.info("🔄 Reconectando con SharePoint...")
-            # FIX: Use session state flag instead of time.sleep + rerun to avoid JavaScript sync issues
-            if 'sharepoint_retry_count' not in st.session_state:
-                st.session_state.sharepoint_retry_count = 0
-
-            if st.session_state.sharepoint_retry_count < 3:
-                st.session_state.sharepoint_retry_count += 1
-                st.rerun()
-            else:
-                st.error("⚠️ No se pudo conectar a SharePoint después de varios intentos. Por favor, recargue la página.")
-                st.stop()
+            st.info("🔄 Actualizando página en 10 segundos...")
+            time.sleep(10)
+            st.rerun()
 
         # Mostrar frescura de datos - actualizado con TTL correcto
         if not df_en_cache.empty:
@@ -282,20 +269,13 @@ def main():
         """, unsafe_allow_html=True)
 
     except Exception as e:
-        # Handle errors gracefully without triggering more JavaScript loads
-        error_str = str(e).lower()
-
-        # For module loading errors, use a smoother recovery approach
-        if "dynamically imported module" in error_str or "404" in error_str:
-            st.warning("⚠️ Problema temporal de carga. Recargando...")
-            # Reset retry counter to allow fresh start
-            if 'sharepoint_retry_count' in st.session_state:
-                del st.session_state['sharepoint_retry_count']
-            time.sleep(2)
-            st.rerun()
+        # Handle JavaScript errors gracefully
+        if "dynamically imported module" in str(e):
+            st.warning("⚠️ Error de carga temporal. Por favor, recargue la página.")
+            if st.button("🔄 Recargar Página"):
+                st.rerun()
         else:
             st.error(f"Error: {e}")
-            print(f"Full error: {e}")
 
 
 if __name__ == "__main__":
