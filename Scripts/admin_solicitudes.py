@@ -4,6 +4,7 @@ from email_manager import GestorNotificacionesEmail
 import plotly.graph_objects as go
 from timezone_utils_admin import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
 from utils import (invalidar_y_actualizar_cache, calcular_incompletas_con_tiempo_real, calcular_tiempo_pausa_solicitud_individual)
+from state_flow_manager import StateFlowValidator, StateHistoryTracker, validate_and_get_transition_message
 import time
 from datetime import datetime, timedelta
 import io
@@ -1243,15 +1244,17 @@ def mostrar_archivos_adjuntos_administrador(gestor_datos, id_solicitud):
 def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuevo_estado, nueva_prioridad,
                                                    responsable, email_responsable, nuevo_comentario,
                                                    notificar_solicitante, notificar_responsable, archivos_nuevos=None):
-    """Proceso de actualización simplificado y confiable"""
+    """Proceso de actualización simplificado y confiable con validación de flujo de estado"""
 
     try:
-        # Validación de transiciones de estado:
+        # Validación de transiciones de estado usando el nuevo flujo
         estado_actual = solicitud['estado']
 
-        # Validar transición a Completada desde Incompleta
-        if estado_actual == 'Incompleta' and nuevo_estado == 'Completada':
-            st.error("❌ No se puede completar una solicitud incompleta. Primero reanúdela cambiando a 'En Proceso'.")
+        # Validate state transition with state flow manager
+        is_valid, mensaje = validate_and_get_transition_message(estado_actual, nuevo_estado)
+
+        if not is_valid:
+            st.error(mensaje)
             return False
 
         # Rastrear qué cambió realmente
@@ -1298,7 +1301,20 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
                     f"{autor} (Sistema)"
                 )
 
-        # Paso 3: Actualizar en SharePoint (transacción única)
+        # Paso 3: Actualizar historial de estados si hay cambio de estado
+        historial_estados = solicitud.get('historial_estados', '')
+        usuario_admin = st.session_state.get('usuario_admin', 'Admin')
+
+        if 'estado' in cambios:
+            # Add new state to history with timestamp
+            historial_estados = StateHistoryTracker.add_to_history(
+                historial_estados,
+                nuevo_estado,
+                usuario_admin,
+                nuevo_comentario if nuevo_comentario and nuevo_comentario.strip() else ""
+            )
+
+        # Paso 4: Actualizar en SharePoint (transacción única)
         with st.spinner("🔄 Actualizando solicitud..."):
 
             # Actualizar prioridad si cambió
@@ -1309,12 +1325,13 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
                     st.error("❌ Error al actualizar prioridad")
                     return False
 
-            # Actualizar estado y comentarios
+            # Actualizar estado, comentarios e historial
             exito_estado = gestor_datos.actualizar_estado_solicitud(
                 solicitud['id_solicitud'],
                 nuevo_estado,
                 responsable,
-                comentarios_finales
+                comentarios_finales,
+                historial_estados  # Pass the state history
             )
 
             if not exito_estado:

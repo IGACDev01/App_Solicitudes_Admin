@@ -483,45 +483,49 @@ class GestorListasSharePoint:
             print(f"Error agregando solicitud a lista SharePoint: {e}")
             return None
     
-    def actualizar_estado_solicitud(self, id_solicitud: str, nuevo_estado: str, 
-                                responsable: str = "", comentarios: str = "") -> bool:
-        """Actualizar estado de solicitud en Lista SharePoint"""
+    def actualizar_estado_solicitud(self, id_solicitud: str, nuevo_estado: str,
+                                responsable: str = "", comentarios: str = "", historial_estados: str = "") -> bool:
+        """Actualizar estado de solicitud en Lista SharePoint con historial"""
         try:
             # Obtener estado anterior
             solicitud_actual = self.obtener_solicitud_por_id(id_solicitud)
             if solicitud_actual.empty:
                 return False
-            
+
             estado_anterior = solicitud_actual.iloc[0]['estado']
-            
+
             # Gestionar pausas/reanudaciones
             if not self._gestionar_pausa_reanudacion(id_solicitud, estado_anterior, nuevo_estado, "Estado cambiado"):
                 print(f"Error gestionando pausa para solicitud {id_solicitud}")
                 # Continuar con actualización normal aunque falle la gestión de pausa
-            
+
             # Encontrar el elemento SharePoint
             id_sharepoint = self._obtener_id_elemento_sharepoint(id_solicitud)
             if not id_sharepoint:
                 print(f"Elemento SharePoint no encontrado para ID: {id_solicitud}")
                 return False
-            
+
             headers = self._obtener_headers()
             if not headers.get('Authorization'):
                 return False
-            
+
             tiempo_actual_utc = convertir_a_utc_para_almacenamiento(obtener_fecha_actual_colombia()).isoformat() + 'Z'
-            
+
             # Preparar datos de actualización
             datos_actualizacion = {
                 'Estado': nuevo_estado,
                 'FechaActualizacion': tiempo_actual_utc
             }
-            
+
             if responsable:
                 datos_actualizacion['ResponsableAsignado'] = responsable
-            
+
             if comentarios:
                 datos_actualizacion['ComentariosAdmin'] = comentarios
+
+            # Add state history if provided
+            if historial_estados:
+                datos_actualizacion['HistorialEstados'] = historial_estados
             
             # Manejar Completada
             if nuevo_estado == 'Completada':

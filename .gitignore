@@ -1,6 +1,9 @@
 # Streamlit secrets (keep this local only)
 .streamlit/secrets.toml
 
+#Ignore all the Scraper folder
+/Scraper/**
+
 # Environment files
 Scripts/email.env
 *.env
