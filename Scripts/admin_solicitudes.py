@@ -323,7 +323,6 @@ def mostrar_tab_administrador(gestor_datos):
                     # Update cache key
                     invalidar_y_actualizar_cache()
 
-                    st.success("✅ Datos actualizados correctamente!")
                     # Don't use st.rerun() - just reload via callback
                     st.session_state['datos_actualizados'] = obtener_fecha_actual_colombia()
 
