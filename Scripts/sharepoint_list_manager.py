@@ -537,7 +537,7 @@ class GestorListasSharePoint:
             # Add state history if provided
             if historial_estados:
                 datos_actualizacion['HistorialEstados'] = historial_estados
-            
+
             # Manejar Completada
             if nuevo_estado == 'Completada':
                 datos_actualizacion['FechaCompletado'] = tiempo_actual_utc
@@ -575,9 +575,9 @@ class GestorListasSharePoint:
             
             # Actualizar elemento de lista SharePoint
             url_actualizar = f"{self.configuracion_graph['graph_url']}/sites/{self.id_sitio_sharepoint}/lists/{self.id_lista}/items/{id_sharepoint}/fields"
-            
+
             response = requests.patch(url_actualizar, headers=headers, json=datos_actualizacion)
-            
+
             if response.status_code in [200, 204]:
                 print(f"Solicitud {id_solicitud} actualizada exitosamente")
                 return True

@@ -1227,7 +1227,9 @@ def borrar_archivo_con_confirmacion(gestor_datos, id_solicitud: str, nombre_arch
                         id_solicitud,
                         solicitud_actual.iloc[0]['estado'],
                         solicitud_actual.iloc[0].get('responsable_asignado', ''),
-                        comentarios_finales
+                        comentarios_finales,
+                        "",  # historial_estados - no change
+                        solicitud_actual.iloc[0].get('email_responsable', '')  # email_responsable
                     )
 
                 return True
