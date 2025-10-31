@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from email_manager import GestorNotificacionesEmail
-import plotly.graph_objects as go
 from timezone_utils_admin import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
 from utils import (invalidar_y_actualizar_cache, calcular_incompletas_con_tiempo_real, calcular_tiempo_pausa_solicitud_individual)
 from state_flow_manager import StateFlowValidator, StateHistoryTracker, validate_and_get_transition_message
@@ -105,32 +104,16 @@ def inicializar_estados_persistentes():
         st.session_state.timestamp_inicializacion = time.time()
 
 def mantener_estado_expander_persistente(id_solicitud, accion=None, forzar_abierto=False):
-    """Sistema unificado de gestiÃ³n de estado de expanders"""
+    """Simple expander state management"""
     key = f"expander_estado_{id_solicitud}"
-    timestamp_actual = time.time()
 
-    # Si hay una acciÃ³n especÃ­fica, marcar para mantener abierto
+    # Set expanded state if action or force specified
     if accion or forzar_abierto:
-        st.session_state[key] = {
-            'expandido': True,
-            'timestamp': timestamp_actual,
-            'accion': accion or 'manual',
-            'duracion': 15  # Mantener abierto por 15 segundos
-        }
+        st.session_state[key] = True
         return True
 
-    # Verificar estado existente
-    estado = st.session_state.get(key)
-    if estado and estado.get('expandido'):
-        tiempo_transcurrido = timestamp_actual - estado['timestamp']
-        if tiempo_transcurrido < estado.get('duracion', 10):
-            return True
-        else:
-            # Limpiar estado expirado
-            if key in st.session_state:
-                del st.session_state[key]
-
-    return False
+    # Check if expanded
+    return st.session_state.get(key, False)
 
 def cache_archivos_persistente(id_solicitud, archivos=None, forzar_recarga=False):
     """Cache persistente para archivos adjuntos con mejor manejo de estados"""
@@ -176,31 +159,6 @@ def cache_archivos_persistente(id_solicitud, archivos=None, forzar_recarga=False
                     return []
 
     return None
-
-def limpiar_estados_expirados():
-    """Limpiar estados expirados periódicamente"""
-    if not hasattr(st.session_state, 'expanders_persistentes'):
-        return
-
-    timestamp_actual = time.time()
-
-    # Limpiar expanders expirados
-    keys_expirados = []
-    for key, estado in st.session_state.expanders_persistentes.items():
-        if timestamp_actual - estado['timestamp'] > TIEMPO_PERSISTENCIA_EXPANDER:
-            keys_expirados.append(key)
-
-    for key in keys_expirados:
-        del st.session_state.expanders_persistentes[key]
-
-    # Limpiar cache de archivos expirado
-    keys_cache_expirados = []
-    for key, cache in st.session_state.archivos_cache_persistente.items():
-        if timestamp_actual - cache['timestamp'] > TIEMPO_PERSISTENCIA_ARCHIVOS:
-            keys_cache_expirados.append(key)
-
-    for key in keys_cache_expirados:
-        del st.session_state.archivos_cache_persistente[key]
 
 def agregar_comentario_administrador(comentario_actual, nuevo_comentario, responsable):
     """Agregar un nuevo comentario administrativo con timestamp y autor"""
@@ -311,9 +269,6 @@ def mostrar_tab_administrador(gestor_datos):
 
     # Inicializar estados persistentes
     inicializar_estados_persistentes()
-
-    # Limpiar estados expirados cada vez
-    limpiar_estados_expirados()
 
     # Verificar autenticación PRIMERO
     if not st.session_state.get('admin_autenticado', False):
