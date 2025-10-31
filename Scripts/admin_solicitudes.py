@@ -355,17 +355,22 @@ def mostrar_tab_administrador(gestor_datos):
             # FIX: Force reload from SharePoint
             with st.spinner("🔄 Actualizando datos desde SharePoint..."):
                 try:
-                    # Clear data cache
+                    # Clear all Streamlit cache data
                     st.cache_data.clear()
 
                     # Force gestor_datos to reload from SharePoint
                     gestor_datos.cargar_datos(forzar_recarga=True)
 
-                    # Update cache key
+                    # Update cache key to prevent stale data
                     invalidar_y_actualizar_cache()
 
-                    # Don't use st.rerun() - just reload via callback
+                    # Mark as updated for UI feedback
                     st.session_state['datos_actualizados'] = obtener_fecha_actual_colombia()
+
+                    # Force page rerun to display new data immediately
+                    st.success("✅ Datos actualizados correctamente desde SharePoint")
+                    time.sleep(1)  # Brief pause to show success message
+                    st.rerun()
 
                 except Exception as e:
                     st.error(f"❌ Error al actualizar: {e}")
@@ -626,13 +631,25 @@ def mostrar_mini_dashboard(df, proceso):
     # Gráfico de estados
     if total > 0:
         datos_estados = df['estado'].value_counts()
-        
+
+        # Colores personalizados para cada estado (matching cards)
+        colores_estados = {
+            'Asignada': '#FAD358',      # Yellow
+            'En Proceso': '#42A5F5',    # Blue
+            'Incompleta': '#FD894A',    # Orange
+            'Completada': '#66BB6A',    # Green
+            'Cancelada': '#EF5350'      # Red
+        }
+
+        # Map colors to labels to ensure correct color assignment
+        colores_mapped = [colores_estados.get(estado, '#CCCCCC') for estado in datos_estados.index]
+
         fig = go.Figure(data=[
             go.Pie(
                 labels=datos_estados.index,
                 values=datos_estados.values,
                 hole=0.4,
-                marker=dict(colors=['#FAD358', '#42A5F5', '#FD894A', '#66BB6A', '#EF5350'])
+                marker=dict(colors=colores_mapped)
             )
         ])
         

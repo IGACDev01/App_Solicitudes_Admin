@@ -64,8 +64,8 @@ st.markdown("""
 def invalidar_cache_datos():
     """Invalidar cache de datos después de operaciones de escritura"""
     try:
-        # Clear the specific cache function
-        obtener_datos_sharepoint_en_cache.clear()
+        # Clear all Streamlit cache data
+        st.cache_data.clear()
         print("✅ Cache de datos invalidado")
     except Exception as e:
         print(f"⚠️ Error invalidando cache: {e}")
