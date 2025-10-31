@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from utils import (invalidar_y_actualizar_cache, calcular_tiempo_pausa_en_tiempo_real, aplicar_tiempos_pausa_tiempo_real_dataframe, calcular_incompletas_con_tiempo_real)
-from timezone_utils_admin import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
+from shared_timezone_utils import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
 
 
 def mostrar_login_dashboard():

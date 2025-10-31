@@ -2,7 +2,7 @@ import requests
 from typing import Dict, Any, Optional
 import os
 import streamlit as st
-from timezone_utils_admin import obtener_fecha_actual_colombia, formatear_fecha_colombia
+from shared_timezone_utils import obtener_fecha_actual_colombia, formatear_fecha_colombia
 
 URL_APLICACION = "https://igac-requests-control-panel.streamlit.app/"
 

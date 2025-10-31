@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import requests
 from typing import Dict, Any, Optional, List
 from urllib.parse import quote
-from timezone_utils_admin import obtener_fecha_actual_colombia, convertir_a_colombia, convertir_a_utc_para_almacenamiento
+from shared_timezone_utils import obtener_fecha_actual_colombia, convertir_a_colombia, convertir_a_utc_para_almacenamiento
 
 class GestorListasSharePoint:
     def __init__(self, nombre_lista: str = "Data App Solicitudes"):
@@ -462,7 +462,6 @@ class GestorListasSharePoint:
             }
             
             # Agregar HistorialEstados - registrar estado inicial
-            from timezone_utils_admin import obtener_fecha_actual_colombia
             timestamp_inicial = obtener_fecha_actual_colombia().strftime('%d/%m/%Y %H:%M:%S COT')
             historial_inicial = f"[{timestamp_inicial}] Asignada"
             elemento_lista['fields']['HistorialEstados'] = historial_inicial

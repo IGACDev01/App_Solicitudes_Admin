@@ -6,7 +6,7 @@ Manages request state transitions with validation rules and history tracking
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 import pandas as pd
-from timezone_utils_admin import obtener_fecha_actual_colombia
+from shared_timezone_utils import obtener_fecha_actual_colombia
 
 # Define valid state transitions
 VALID_STATES = ["Asignada", "En Proceso", "Incompleta", "Completada", "Cancelada"]

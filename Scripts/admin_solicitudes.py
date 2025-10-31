@@ -1,9 +1,12 @@
 import streamlit as st
 import pandas as pd
 from email_manager import GestorNotificacionesEmail
-from timezone_utils_admin import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
-from utils import (invalidar_y_actualizar_cache, calcular_incompletas_con_tiempo_real, calcular_tiempo_pausa_solicitud_individual)
+from shared_timezone_utils import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
+from shared_html_utils import limpiar_contenido_html, formatear_comentarios_administrador_para_mostrar
+from shared_cache_utils import invalidar_y_actualizar_cache
+from utils import (calcular_incompletas_con_tiempo_real, calcular_tiempo_pausa_solicitud_individual)
 from state_flow_manager import StateFlowValidator, StateHistoryTracker, validate_and_get_transition_message
+import plotly.graph_objects as go
 import time
 from datetime import datetime, timedelta
 import io
@@ -172,55 +175,6 @@ def agregar_comentario_administrador(comentario_actual, nuevo_comentario, respon
         # Primer comentario
         return nueva_entrada
 
-def limpiar_contenido_html(contenido):
-    """Limpiar contenido HTML para visualización - función de utilidad compartida"""
-    if not contenido or not isinstance(contenido, str):
-        return "Sin contenido disponible"
-    
-    import re
-    from html import unescape
-    
-    # Primero, decodificar entidades HTML
-    contenido_limpio = unescape(contenido)
-    
-    # Remover todas las etiquetas HTML pero preservar el contenido de texto
-    contenido_limpio = re.sub(r'<[^>]+>', '', contenido_limpio)
-    
-    # Limpiar espacios en blanco extra y saltos de línea
-    contenido_limpio = re.sub(r'\s+', ' ', contenido_limpio).strip()
-    
-    # Si el resultado está vacío o muy corto, mostrar fallback
-    if not contenido_limpio or len(contenido_limpio.strip()) < 3:
-        return "Sin contenido disponible"
-    
-    return contenido_limpio
-
-def formatear_comentarios_administrador_para_mostrar(comentarios):
-    """Formatear comentarios administrativos para visualización en panel de administración"""
-    if not comentarios or not comentarios.strip():
-        return "Sin comentarios previos"
-
-    # Limpiar contenido HTML primero
-    comentarios_limpios = limpiar_contenido_html(comentarios)
-
-    # Dividir por dobles saltos de línea (separadores de comentarios)
-    lista_comentarios = comentarios_limpios.split('\n\n')
-    comentarios_html = []
-
-    for comentario in lista_comentarios:
-        if comentario.strip():
-            # Parsear timestamp y autor si están disponibles
-            if comentario.startswith('[') and ']:' in comentario:
-                try:
-                    timestamp_autor = comentario.split(']:')[0] + ']'
-                    texto = comentario.split(']:')[1].strip()
-                    comentarios_html.append(f"**{timestamp_autor}**\n{texto}")
-                except:
-                    comentarios_html.append(comentario)
-            else:
-                comentarios_html.append(comentario)
-
-    return '\n\n'.join(comentarios_html)
 
 
 def mostrar_exito_actualizacion(gestor_datos, proceso_admin):
@@ -487,7 +441,6 @@ def normalizar_datetime(dt):
 def mostrar_mini_dashboard(df, proceso):
     """Mini dashboard del proceso"""
 
-    from timezone_utils_admin import obtener_fecha_actual_colombia
     st.subheader(f"📊 Dashboard - {proceso}")
 
     # Métricas principales
@@ -556,7 +509,6 @@ def mostrar_mini_dashboard(df, proceso):
         # Buscar incompletas por mucho tiempo
         df_incompletas = df[df['estado'] == 'Incompleta']
         if not df_incompletas.empty and 'fecha_pausa' in df_incompletas.columns:
-            from timezone_utils_admin import convertir_a_colombia, obtener_fecha_actual_colombia
             fecha_actual = obtener_fecha_actual_colombia()
 
             # Encontrar incompletas por más de 7 días con sus IDs
@@ -795,7 +747,6 @@ def mostrar_lista_solicitudes_administrador_mejorada(gestor_datos, df, proceso):
 
 def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
     """Versión con super lazy loading - archivos solo se cargan al hacer clic"""
-    from timezone_utils_admin import obtener_fecha_actual_colombia
 
     # === DATOS LIGEROS (siempre se cargan) ===
     estado = solicitud['estado']
