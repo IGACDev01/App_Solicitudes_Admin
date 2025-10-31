@@ -4,6 +4,7 @@ from email_manager import GestorNotificacionesEmail
 from shared_timezone_utils import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
 from shared_html_utils import limpiar_contenido_html, formatear_comentarios_administrador_para_mostrar
 from shared_cache_utils import invalidar_y_actualizar_cache
+from shared_filter_utils import DataFrameFilterUtil
 from utils import (calcular_incompletas_con_tiempo_real, calcular_tiempo_pausa_solicitud_individual)
 from state_flow_manager import StateFlowValidator, StateHistoryTracker, validate_and_get_transition_message
 import plotly.graph_objects as go
@@ -607,33 +608,23 @@ def mostrar_filtros_busqueda(df):
             key="busqueda_admin"
         )
 
-    # Aplicar filtros
-    df_filtrado = df
+    # Aplicar filtros usando utilidad consolidada
+    df_filtrado = DataFrameFilterUtil.apply_filters(
+        df,
+        estado=filtros_estado if filtros_estado else None,
+        prioridad=filtros_prioridad if filtros_prioridad else None,
+        search_term=busqueda if busqueda else None,
+        search_columns=['id_solicitud', 'nombre_solicitante']
+    )
 
-    # Filtro de estados (múltiple)
-    if filtros_estado:
-        df_filtrado = df_filtrado[df_filtrado['estado'].isin(filtros_estado)]
-
-    # Filtro de prioridades (múltiple)
-    if filtros_prioridad and 'prioridad' in df_filtrado.columns:
-        df_filtrado = df_filtrado[df_filtrado['prioridad'].isin(filtros_prioridad)]
-
-    # Búsqueda de texto
-    if busqueda:
-        mask = (
-                df_filtrado['id_solicitud'].str.contains(busqueda, case=False, na=False) |
-                df_filtrado['nombre_solicitante'].str.contains(busqueda, case=False, na=False)
-        )
-        df_filtrado = df_filtrado[mask]
-
-    # === NUEVO: Ordenar TODAS las solicitudes filtradas por fecha (más reciente primero) ===
+    # === Ordenar todas las solicitudes filtradas por fecha (más reciente primero) ===
     if 'fecha_solicitud' in df_filtrado.columns and not df_filtrado.empty:
-        df_filtrado = df_filtrado.assign(
-            fecha_solicitud_normalizada=df_filtrado['fecha_solicitud'].apply(normalizar_datetime)
-        ).sort_values('fecha_solicitud_normalizada', ascending=False)
-
-        # Remover la columna auxiliar
-        df_filtrado = df_filtrado.drop('fecha_solicitud_normalizada', axis=1)
+        # Sort directly without creating temporary column
+        df_filtrado = df_filtrado.sort_values(
+            by='fecha_solicitud',
+            ascending=False,
+            key=lambda x: x.apply(normalizar_datetime)
+        )
 
     # Paginación simple (10 elementos fijos)
     solicitudes_por_pagina = 5
@@ -667,7 +658,7 @@ def mostrar_filtros_busqueda(df):
         st.write("📋 No se encontraron solicitudes")
 
 def mostrar_paginacion():
-    """Mostrar controles de paginación estilo limpio"""
+    """Mostrar controles de paginación con selectbox (simplificado)"""
     pagina_actual = st.session_state.get('pagina_actual', 1)
     total_paginas = st.session_state.get('total_paginas', 1)
 
@@ -676,53 +667,20 @@ def mostrar_paginacion():
 
     st.markdown("---")
 
-    # Crear columnas para centrar la paginación
+    # Simple selectbox for page selection
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        # Crear botones de paginación
-        cols = st.columns([1, 1, 3, 1, 1])
+        nueva_pagina = st.selectbox(
+            "Página",
+            options=range(1, total_paginas + 1),
+            index=pagina_actual - 1,
+            label_visibility="collapsed"
+        )
 
-        # Botón anterior
-        with cols[0]:
-            if st.button("◀", disabled=(pagina_actual <= 1), key="prev_page"):
-                st.session_state.pagina_actual = max(1, pagina_actual - 1)
-                st.rerun()
-
-        # Números de página como botones
-        with cols[2]:
-            # Mostrar páginas como botones (máximo 5 páginas visibles)
-            paginas_a_mostrar = []
-
-            if total_paginas <= 5:
-                paginas_a_mostrar = list(range(1, total_paginas + 1))
-            else:
-                if pagina_actual <= 3:
-                    paginas_a_mostrar = [1, 2, 3, 4, 5]
-                elif pagina_actual >= total_paginas - 2:
-                    paginas_a_mostrar = list(range(total_paginas - 4, total_paginas + 1))
-                else:
-                    paginas_a_mostrar = list(range(pagina_actual - 2, pagina_actual + 3))
-
-            # Crear mini-columnas para cada número de página
-            mini_cols = st.columns(len(paginas_a_mostrar))
-
-            for i, pagina in enumerate(paginas_a_mostrar):
-                with mini_cols[i]:
-                    if pagina == pagina_actual:
-                        st.markdown(
-                            f"<div style='background: #007bff; color: white; text-align: center; padding: 4px; border-radius: 4px; margin: 2px;'>{pagina}</div>",
-                            unsafe_allow_html=True)
-                    else:
-                        if st.button(str(pagina), key=f"page_{pagina}"):
-                            st.session_state.pagina_actual = pagina
-                            st.rerun()
-
-        # Botón siguiente
-        with cols[4]:
-            if st.button("▶", disabled=(pagina_actual >= total_paginas), key="next_page"):
-                st.session_state.pagina_actual = min(total_paginas, pagina_actual + 1)
-                st.rerun()
+        if nueva_pagina != pagina_actual:
+            st.session_state.pagina_actual = nueva_pagina
+            st.rerun()
 
 def mostrar_lista_solicitudes_administrador_mejorada(gestor_datos, df, proceso):
     """Lista mejorada con mejor gestión de estado y paginación"""

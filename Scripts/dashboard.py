@@ -7,6 +7,128 @@ from utils import (invalidar_y_actualizar_cache, calcular_tiempo_pausa_en_tiempo
 from shared_timezone_utils import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
 
 
+def calcular_resumen_dataframe(df: pd.DataFrame) -> dict:
+    """Calculate summary from DataFrame without modifying state
+
+    Args:
+        df: DataFrame to calculate summary from
+
+    Returns:
+        Dictionary with summary statistics
+    """
+    try:
+        return {
+            'total': len(df),
+            'asignada': len(df[df['estado'] == 'Asignada']),
+            'en_proceso': len(df[df['estado'] == 'En Proceso']),
+            'incompleta': len(df[df['estado'] == 'Incompleta']),
+            'completada': len(df[df['estado'] == 'Completada']),
+            'cancelada': len(df[df['estado'] == 'Cancelada']),
+        }
+    except Exception as e:
+        print(f"⚠️ Error calculating summary: {e}")
+        return {
+            'total': 0,
+            'asignada': 0,
+            'en_proceso': 0,
+            'incompleta': 0,
+            'completada': 0,
+            'cancelada': 0,
+        }
+
+
+def mostrar_metricas_principales_filtrado(df: pd.DataFrame):
+    """Show main metrics from filtered DataFrame"""
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        total = len(df)
+        st.metric("📋 Total", total)
+
+    with col2:
+        asignada = len(df[df['estado'] == 'Asignada'])
+        st.metric("🟡 Asignada", asignada)
+
+    with col3:
+        en_proceso = len(df[df['estado'] == 'En Proceso'])
+        st.metric("🔵 En Proceso", en_proceso)
+
+    with col4:
+        incompleta = len(df[df['estado'] == 'Incompleta'])
+        st.metric("🟠 Incompleta", incompleta)
+
+    with col5:
+        completada = len(df[df['estado'] == 'Completada'])
+        st.metric("🟢 Completada", completada)
+
+
+def mostrar_grafico_prioridades_filtrado(df: pd.DataFrame):
+    """Show priorities chart from filtered DataFrame"""
+    if 'prioridad' not in df.columns:
+        return
+
+    prioridades = df['prioridad'].value_counts()
+    if not prioridades.empty:
+        fig = px.bar(x=prioridades.index, y=prioridades.values, title="Distribución por Prioridad")
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def mostrar_grafico_procesos_filtrado(df: pd.DataFrame):
+    """Show processes chart from filtered DataFrame"""
+    if 'proceso' not in df.columns:
+        return
+
+    procesos = df['proceso'].value_counts()
+    if not procesos.empty:
+        fig = px.bar(x=procesos.index, y=procesos.values, title="Distribución por Proceso")
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def mostrar_grafico_territoriales_filtrado(df: pd.DataFrame):
+    """Show territorial chart from filtered DataFrame"""
+    if 'territorial' not in df.columns:
+        return
+
+    territoriales = df['territorial'].value_counts().head(10)
+    if not territoriales.empty:
+        fig = px.bar(x=territoriales.index, y=territoriales.values, title="Distribución por Territorial (Top 10)")
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def mostrar_analisis_temporal_filtrado(df: pd.DataFrame):
+    """Show temporal analysis from filtered DataFrame"""
+    if 'fecha_solicitud' not in df.columns:
+        return
+
+    st.subheader("📅 Análisis Temporal")
+    df_temporal = df.copy()
+    df_temporal['fecha'] = pd.to_datetime(df_temporal['fecha_solicitud']).dt.date
+    timeline = df_temporal['fecha'].value_counts().sort_index()
+
+    if not timeline.empty:
+        fig = px.line(x=timeline.index, y=timeline.values, title="Solicitudes por Fecha", markers=True)
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def mostrar_visualizador_dataframe_filtrado(df: pd.DataFrame):
+    """Show DataFrame viewer for filtered data"""
+    st.subheader("🔍 Explorador de Datos")
+
+    if df.empty:
+        st.info("No hay datos para mostrar")
+        return
+
+    # Show basic statistics
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Total registros", len(df))
+    with col2:
+        st.metric("Columnas", len(df.columns))
+
+    # Show the data
+    st.dataframe(df, use_container_width=True)
+
+
 def mostrar_login_dashboard():
     """Interfaz de login para acceso al dashboard"""
     st.markdown("### 🔐 Acceso al Dashboard")
@@ -191,61 +313,53 @@ def mostrar_tab_dashboard(gestor_datos):
         st.warning("⚠️ No se encontraron solicitudes con los filtros aplicados")
         return
 
-    # Guardar datos originales
-    df_original = gestor_datos.df
-    
-    # Establecer datos filtrados
-    gestor_datos.df = df_filtrado_global
-    
-    # Obtener resumen de datos filtrados
-    resumen = gestor_datos.obtener_resumen_solicitudes()
-    
+    # Calcular resumen de datos filtrados WITHOUT modifying manager state
+    # Create temporary copy of manager with filtered data to get resumen
+    resumen = calcular_resumen_dataframe(df_filtrado_global)
+
     # Mostrar hora de última actualización
     ultima_actualizacion = obtener_fecha_actual_colombia().strftime('%H:%M:%S')
     st.caption(f"📊 Última actualización: {ultima_actualizacion}")
-    
-    # Mostrar alertas del sistema
+
+    # Mostrar alertas del sistema (using original gestor_datos)
     mostrar_alertas_sistema(gestor_datos)
-    
+
     # Métricas principales
     st.subheader("📈 Métricas Principales")
-    mostrar_metricas_principales(gestor_datos)
-       
+    mostrar_metricas_principales_filtrado(df_filtrado_global)
+
     st.markdown("---")
-    
+
     # Análisis visual
     st.subheader("📊 Análisis General")
-    
+
     # Primera fila de gráficos
     col1, col2 = st.columns(2)
-    
+
     with col1:
         mostrar_grafico_estados(resumen)
-    
+
     with col2:
-        mostrar_grafico_prioridades(gestor_datos)
+        mostrar_grafico_prioridades_filtrado(df_filtrado_global)
 
     # Segunda fila de gráficos
-    mostrar_grafico_procesos(gestor_datos)
-    
+    mostrar_grafico_procesos_filtrado(df_filtrado_global)
+
     # Tercera fila de gráficos
     mostrar_grafico_tipos(resumen)
-       
+
     # Cuarta fila de gráficos
-    mostrar_grafico_territoriales(gestor_datos)
-    
+    mostrar_grafico_territoriales_filtrado(df_filtrado_global)
+
     st.markdown("---")
-    
+
     # Análisis temporal
-    mostrar_analisis_temporal(gestor_datos)
-    
+    mostrar_analisis_temporal_filtrado(df_filtrado_global)
+
     st.markdown("---")
-    
+
     # Visualizador de DataFrame
-    mostrar_visualizador_dataframe(gestor_datos)
-    
-    # IMPORTANTE: Restaurar datos originales al final
-    gestor_datos.df = df_original
+    mostrar_visualizador_dataframe_filtrado(df_filtrado_global)
 
 def mostrar_visualizador_dataframe(gestor_datos):
     """Mostrar visualizador de DataFrame con filtros avanzados - optimizado para SharePoint"""
