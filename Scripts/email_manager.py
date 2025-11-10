@@ -76,8 +76,8 @@ class GestorNotificacionesEmail:
                 "Transporte": ["TESTtransporte@igac.gov.co"]
             },
             "Oficina Asesora de Comunicaciones": {
-                "Comunicación Externa": ["TESTcomunicaciones@igac.gov.co"],
-                "Comunicación Interna": ["TESTcomunicacioninterna@igac.gov.co"]
+                "Comunicación Externa": ["comunicaciones@igac.gov.co"],
+                "Comunicación Interna": ["comunicacioninterna@igac.gov.co"]
             }
         }
 
@@ -95,7 +95,7 @@ class GestorNotificacionesEmail:
     def enviar_notificacion_nueva_solicitud(self, datos_solicitud: Dict[str, Any], id_solicitud: str) -> bool:
         """Envía notificación de nueva solicitud a responsables y confirmación al solicitante"""
         if not self.email_habilitado:
-            print(f"[SIMULACIÓN] Notificaciones de email para solicitud {id_solicitud}")
+            print(f"Notificaciones de email para solicitud {id_solicitud}")
             print(f"- Área: {datos_solicitud['area']}")
             print(f"- Proceso: {datos_solicitud['proceso']}")
             print(f"- Tipo: {datos_solicitud['tipo']}")
