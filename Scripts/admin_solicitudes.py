@@ -939,13 +939,10 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
 
                 with col1:
                     cargar_archivos = st.button(
-                        "📁 Cargar archivos adjuntos",
+                        "📁 Ver archivos adjuntos",
                         key=f"load_files_{id_solicitud}",
                         help="Ver archivos adjuntos de esta solicitud"
                     )
-
-                with col2:
-                    st.caption("👆 Haz clic para ver los archivos adjuntos")
 
                 if cargar_archivos:
                     st.session_state[loading_key] = True
@@ -975,9 +972,14 @@ def mostrar_solicitud_administrador_mejorada(gestor_datos, solicitud, proceso):
             with col1:
                 # Only show allowed transitions
                 if estados_permitidos:
+                    # Add current state as option for En Proceso and Incompleta
+                    opciones_estado = list(estados_permitidos)
+                    if estado_actual in ['En Proceso', 'Incompleta'] and estado_actual not in opciones_estado:
+                        opciones_estado.insert(0, estado_actual)
+
                     nuevo_estado = st.selectbox(
-                        "Cambiar Estado a:",
-                        options=estados_permitidos,
+                        "Estado:",
+                        options=opciones_estado,
                         key=f"estado_{solicitud['id_solicitud']}"
                     )
                 else:

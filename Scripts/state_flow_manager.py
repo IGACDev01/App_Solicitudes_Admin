@@ -58,9 +58,12 @@ class StateFlowValidator:
         if nuevo_estado not in VALID_STATES:
             return False, f"Nuevo estado inválido: '{nuevo_estado}'"
 
-        # Same state transition is always invalid
+        # Allow same state for En Proceso and Incompleta (for adding comments)
         if estado_actual == nuevo_estado:
-            return False, f"El estado ya es '{nuevo_estado}'"
+            if estado_actual in ['En Proceso', 'Incompleta']:
+                return True, f"✅ Manteniendo estado '{nuevo_estado}' (agregando comentarios)"
+            else:
+                return False, f"El estado ya es '{nuevo_estado}'"
 
         # Check if transition is allowed
         allowed_states = STATE_TRANSITIONS[estado_actual]["allowed"]
