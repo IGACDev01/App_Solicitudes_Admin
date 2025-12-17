@@ -14,16 +14,22 @@ def calcular_resumen_dataframe(df: pd.DataFrame) -> dict:
         df: DataFrame to calculate summary from
 
     Returns:
-        Dictionary with summary statistics
+        Dictionary with summary statistics in the format expected by chart functions
     """
     try:
+        # Generar distribuciones por estado y tipo
+        por_estado = df['estado'].value_counts().to_dict() if 'estado' in df.columns else {}
+        por_tipo = df['tipo_solicitud'].value_counts().to_dict() if 'tipo_solicitud' in df.columns else {}
+
         return {
             'total': len(df),
-            'asignada': len(df[df['estado'] == 'Asignada']),
-            'en_proceso': len(df[df['estado'] == 'En Proceso']),
-            'incompleta': len(df[df['estado'] == 'Incompleta']),
-            'completada': len(df[df['estado'] == 'Completada']),
-            'cancelada': len(df[df['estado'] == 'Cancelada']),
+            'asignada': len(df[df['estado'] == 'Asignada']) if 'estado' in df.columns else 0,
+            'en_proceso': len(df[df['estado'] == 'En Proceso']) if 'estado' in df.columns else 0,
+            'incompleta': len(df[df['estado'] == 'Incompleta']) if 'estado' in df.columns else 0,
+            'completada': len(df[df['estado'] == 'Completada']) if 'estado' in df.columns else 0,
+            'cancelada': len(df[df['estado'] == 'Cancelada']) if 'estado' in df.columns else 0,
+            'solicitudes_por_estado': por_estado,
+            'solicitudes_por_tipo': por_tipo,
         }
     except Exception as e:
         print(f"⚠️ Error calculating summary: {e}")
@@ -34,6 +40,8 @@ def calcular_resumen_dataframe(df: pd.DataFrame) -> dict:
             'incompleta': 0,
             'completada': 0,
             'cancelada': 0,
+            'solicitudes_por_estado': {},
+            'solicitudes_por_tipo': {},
         }
 
 
