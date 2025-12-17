@@ -64,33 +64,16 @@ def cargar_credenciales_administradores():
                         'password': st.secrets[password_key]
                     }
 
-        return credenciales_procesadas if credenciales_procesadas["Subdirección Administrativa y Financiera"] else _cargar_credenciales_defecto()
+        if not credenciales_procesadas["Subdirección Administrativa y Financiera"] and not credenciales_procesadas["Oficina Asesora de Comunicaciones"]:
+            st.error("❌ No se encontraron credenciales de administrador en secrets.toml")
+            st.stop()
+
+        return credenciales_procesadas
 
     except Exception as e:
-        print(f"Advertencia: No se pudo cargar credenciales desde secrets: {e}")
-        return _cargar_credenciales_defecto()
-
-def _cargar_credenciales_defecto():
-    """Credenciales por defecto (fallback)"""
-    return {
-        "Subdirección Administrativa y Financiera": {
-            "Almacén": {"usuario": "admin_almacen", "password": "Almacen3455*"},
-            "Archivo": {"usuario": "admin_archivo", "password": "Archivo4790*"},
-            "Contabilidad": {"usuario": "admin_contabilidad", "password": "Contable9865#"},
-            "Contractual": {"usuario": "admin_contractual", "password": "Contractual6518!"},
-            "Correspondencia": {"usuario": "admin_correspondencia", "password": "Correo3981$"},
-            "Infraestructura": {"usuario": "admin_infraestructura", "password": "Infraestructura2387!"},
-            "Operación Logística SAF": {"usuario": "admin_operacion", "password": "Logistica0978#"},
-            "Presupuesto": {"usuario": "admin_presupuesto", "password": "Presupuesto3425$"},
-            "Tesorería": {"usuario": "admin_tesoreria", "password": "Tesoreria9248!"},
-            "Tiquetes": {"usuario": "admin_tiquetes", "password": "Tiquetes9845$"},
-            "Transporte": {"usuario": "admin_transporte", "password": "Transporte5926*"}
-        },
-        "Oficina Asesora de Comunicaciones": {
-            "Comunicación Externa": {"usuario": "admin_com_externa", "password": "ComExt2024!"},
-            "Comunicación Interna": {"usuario": "admin_com_interna", "password": "ComInt2024!"}
-        }
-    }
+        st.error(f"❌ Error al cargar credenciales: {e}")
+        st.error("Verifique que el archivo .streamlit/secrets.toml existe y tiene las credenciales configuradas")
+        st.stop()
 
 # Cargar credenciales al iniciar
 CREDENCIALES_ADMINISTRADORES = cargar_credenciales_administradores()

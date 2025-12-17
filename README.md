@@ -1,52 +1,29 @@
 # Sistema de Gestión de Solicitudes Administrativas - IGAC
 
-![IGAC Logo](Theme/Logo%20IGAC.png)
-
 ## 📋 Descripción
 
-Sistema web administrativo desarrollado con Streamlit para el **Instituto Geográfico Agustín Codazzi (IGAC)** que permite gestionar el ciclo de vida completo de solicitudes departamentales. El sistema se integra con SharePoint como base de datos backend mediante Microsoft Graph API y proporciona un dashboard interactivo para administradores departamentales.
+Sistema web administrativo desarrollado con Streamlit para el **Instituto Geográfico Agustín Codazzi (IGAC)** que permite gestionar el ciclo de vida completo de solicitudes hechas por las diferentes territoriales del IGAC. El sistema se integra con SharePoint como base de datos backend mediante Microsoft Graph API y proporciona un dashboard interactivo para administradores de diferentes áreas (SAF y comunicaciones actualmente).
 
 ### ¿Qué hace este sistema?
 
-Este sistema permite a los administradores de diferentes departamentos del IGAC:
+Este sistema permite a los administradores de diferentes áreas del IGAC:
 
-- ✅ **Ver y gestionar solicitudes** de su departamento en tiempo real
+- ✅ **Ver y gestionar solicitudes** de su área en tiempo real
 - ✅ **Cambiar el estado** de las solicitudes siguiendo flujos de trabajo validados
 - ✅ **Filtrar y buscar** solicitudes por múltiples criterios (estado, fecha, solicitante, etc.)
 - ✅ **Agregar comentarios** y documentación a cada solicitud
 - ✅ **Exportar reportes** a Excel para análisis adicional
-- ✅ **Ver estadísticas** y métricas del departamento en dashboards interactivos
+- ✅ **Ver estadísticas** y métricas del área en dashboards interactivos
 - ✅ **Recibir y enviar notificaciones** por correo electrónico automáticamente
 
 ### Características Principales
 
-- 🔐 **Control de acceso por departamento**: Cada administrador solo ve las solicitudes de su área
+- 🔐 **Control de acceso por área**: Cada administrador solo ve las solicitudes de su área
 - 📊 **Dashboard de análisis**: Gráficos interactivos y métricas en tiempo real
 - 🔄 **Sincronización con SharePoint**: Todos los cambios se guardan automáticamente en SharePoint
-- ⏰ **Zona horaria Colombia**: Todas las fechas y horas se muestran en hora colombiana (COT)
 - 📧 **Notificaciones automáticas**: Envío de correos cuando cambia el estado de una solicitud
 - 📁 **Exportación de datos**: Descarga de solicitudes filtradas en formato Excel
 - 🛡️ **Validación de flujos**: El sistema previene cambios de estado inválidos
-- 🚀 **Sistema de despertar**: Programador automático que mantiene la aplicación activa
-
-## 🎯 Casos de Uso
-
-### Escenario 1: Administrador del Almacén
-María es la administradora del departamento de Almacén. Cada mañana:
-1. Ingresa al sistema con sus credenciales de almacén
-2. Ve las nuevas solicitudes en estado "Asignada"
-3. Revisa cada solicitud y cambia el estado a "En Proceso"
-4. Agrega comentarios sobre el progreso
-5. Al finalizar, cambia el estado a "Completada"
-6. El solicitante recibe un correo automático notificándole
-
-### Escenario 2: Administrador de Contabilidad
-Juan necesita generar un reporte mensual:
-1. Accede al Dashboard
-2. Filtra solicitudes por fecha (último mes)
-3. Ve estadísticas de solicitudes completadas vs pendientes
-4. Exporta los datos a Excel
-5. Usa el archivo para su reporte mensual
 
 ## 🔧 Requisitos Previos
 
@@ -63,9 +40,6 @@ Antes de comenzar, asegúrate de tener instalado:
    - Descargar desde: https://git-scm.com/downloads
    - Verificar instalación: `git --version`
 
-3. **Google Chrome** (para el sistema de despertar)
-   - Descargar desde: https://www.google.com/chrome/
-
 ### Credenciales Necesarias
 
 Necesitarás obtener las siguientes credenciales del administrador del sistema:
@@ -81,8 +55,8 @@ Necesitarás obtener las siguientes credenciales del administrador del sistema:
 - **Credenciales SMTP** (para correos):
   - Servidor SMTP, puerto, usuario y contraseña
 
-- **Credenciales de administrador** (una por departamento):
-  - Usuario y contraseña para cada departamento (Almacén, Contabilidad, etc.)
+- **Credenciales de administrador** (una por proceso):
+  - Usuario y contraseña para cada proceso (Almacén, Contabilidad, etc.)
 
 ## 📦 Instalación
 
@@ -184,7 +158,7 @@ Este es el paso **MÁS IMPORTANTE**. Sin esta configuración, la aplicación no 
    smtp_remitente = "Sistema de Solicitudes <notificaciones@igac.gov.co>"
 
    # Agregar más credenciales de administrador según sea necesario
-   # para otros departamentos (Recursos Humanos, IT, etc.)
+   # para otros procesos según se requiera
    ```
 
 3. **⚠️ IMPORTANTE - Seguridad:**
@@ -255,27 +229,15 @@ App_Solicitudes_Admin/
 │   ├── state_flow_manager.py           # Validación de flujos de trabajo
 │   ├── shared_cache_utils.py           # Utilidades de caché
 │   ├── shared_filter_utils.py          # Utilidades de filtrado
-│   ├── shared_html_utils.py            # Sanitización HTML (seguridad)
+│   ├── shared_html_utils.py            # Utilidades HTML (seguridad)
 │   ├── shared_timezone_utils.py        # Manejo de zona horaria Colombia
 │   └── utils.py                        # Utilidades generales
-│
-├── 📂 Scraper/                          # Sistema de despertar automático
-│   ├── app_wake_up_scheduler.py        # Script principal del programador
-│   ├── RUN_WAKE_UP_SCHEDULER.bat       # Ejecutable Windows
-│   ├── run_wake_up_scheduler.sh        # Ejecutable Linux/Mac
-│   ├── QUICK_START.md                  # Guía rápida del programador
-│   ├── SCHEDULER_SUMMARY.md            # Resumen técnico
-│   └── WAKE_UP_SCHEDULER_SETUP.md      # Configuración detallada
 │
 ├── 📂 Data/                             # Archivos de datos
 │   └── my_organization_emails.xlsx     # Lista de correos (ejemplo)
 │
 ├── 📂 Theme/                            # Recursos visuales
 │   └── Logo IGAC.png                   # Logo oficial IGAC
-│
-├── 📂 Docs/                             # 📚 DOCUMENTACIÓN
-│   ├── CLAUDE.md                       # Guía completa para desarrolladores
-│   └── CLAUDE_admin.md                 # Documentación adicional
 │
 ├── 📂 .streamlit/                       # ⚙️ CONFIGURACIÓN (NO EN GIT)
 │   ├── config.toml                     # Configuración de Streamlit
@@ -298,7 +260,7 @@ Si necesitas hacer cambios, estos son los archivos más importantes:
 | `Scripts/admin_solicitudes.py` | Agregar campos a la vista de solicitudes |
 | `Scripts/state_flow_manager.py` | Modificar estados o flujos de trabajo |
 | `Scripts/email_manager.py` | Cambiar plantillas de correo |
-| `.streamlit/secrets.toml` | Actualizar credenciales o agregar departamentos |
+| `.streamlit/secrets.toml` | Actualizar credenciales o agregar procesos |
 | `.streamlit/config.toml` | Cambiar tema, colores, configuración de Streamlit |
 
 ## 🎮 Guía de Uso
@@ -310,12 +272,12 @@ Si necesitas hacer cambios, estos son los archivos más importantes:
 1. **Abre la aplicación** (ver sección "Ejecutar la Aplicación")
 2. Verás la pantalla principal con el logo IGAC
 3. Haz clic en la pestaña **"⚙️ Administrar Solicitudes"**
-4. Ingresa tus credenciales de departamento
-5. Una vez autenticado, verás las solicitudes de tu departamento
+4. Ingresa tus credenciales de área
+5. Una vez autenticado, verás las solicitudes de tu área
 
 #### Gestionar una Solicitud
 
-1. **Ver solicitudes**: La tabla muestra todas las solicitudes de tu departamento
+1. **Ver solicitudes**: La tabla muestra todas las solicitudes de tu área
 2. **Filtrar**: Usa los filtros en la barra lateral para buscar solicitudes específicas
    - Por estado (Asignada, En Proceso, etc.)
    - Por rango de fechas
@@ -331,7 +293,7 @@ Si necesitas hacer cambios, estos son los archivos más importantes:
 
 El sistema maneja 5 estados para las solicitudes:
 
-1. **🟡 Asignada**: Solicitud nueva, asignada a tu departamento
+1. **🟡 Asignada**: Solicitud nueva, asignada a tu área
    - Puedes cambiar a: "En Proceso", "Incompleta", o "Cancelada"
 
 2. **🔵 En Proceso**: Estás trabajando activamente en la solicitud
@@ -358,7 +320,7 @@ El sistema maneja 5 estados para las solicitudes:
 1. Haz clic en la pestaña **"📊 Dashboard"**
 2. Verás gráficos interactivos:
    - Distribución de solicitudes por estado
-   - Solicitudes por departamento
+   - Solicitudes por área
    - Tendencias temporales
    - Métricas de rendimiento
 3. Los gráficos son interactivos (puedes hacer zoom, filtrar, etc.)
@@ -378,12 +340,12 @@ STATE_TRANSITIONS = {
 }
 ```
 
-#### Agregar un Nuevo Departamento
+#### Agregar una nueva área
 
 1. Edita `.streamlit/secrets.toml`:
    ```toml
-   admin_nuevo_departamento_usuario = "admin.nuevo@igac.gov.co"
-   admin_nuevo_departamento_password = "password_aqui"
+   admin_nuevo_area_usuario = "admin.nuevo@igac.gov.co"
+   admin_nuevo_area_password = "password_aqui"
    ```
 
 2. Actualiza la lógica de autenticación en `Scripts/admin_solicitudes.py`
@@ -412,53 +374,6 @@ textColor = "#262730"           # Texto oscuro
    gestor = GestorListasSharePoint(nombre_lista="Data App Solicitudes")
    print(gestor.df.head())  # Ver primeras 5 solicitudes
    ```
-
-## 🔄 Sistema de Despertar Automático
-
-El sistema incluye un programador que mantiene la aplicación activa para evitar el estado de "cold start" de Streamlit.
-
-### ¿Qué hace?
-
-- Se ejecuta automáticamente a las 7:00-7:30 AM (hora de Colombia)
-- Abre la aplicación en segundo plano
-- Hace clic en el botón de "despertar" si está disponible
-- Mantiene la app lista para el primer usuario del día
-
-### Configurar el Programador
-
-**Método 1: Ejecución Manual**
-
-```bash
-# Windows
-RUN_WAKE_UP_SCHEDULER.bat
-
-# Linux/Mac
-bash run_wake_up_scheduler.sh
-```
-
-**Método 2: Tarea Programada de Windows**
-
-Ver guía detallada en `Scraper/QUICK_START.md`
-
-1. Abre el Programador de Tareas de Windows
-2. Crea nueva tarea básica
-3. Nombre: "IGAC App Wake-Up"
-4. Trigger: Diario a las 6:50 AM
-5. Acción: Ejecutar `RUN_WAKE_UP_SCHEDULER.bat`
-
-### Verificar que Funciona
-
-Revisa el archivo de log:
-
-```bash
-# Ver el log
-type app_wake_up.log
-
-# Busca mensajes como:
-# ✅ Chrome WebDriver initialized successfully
-# ✅ Wake-up button found! Clicking it...
-# ✅ App wake-up successful!
-```
 
 ## 🐛 Resolución de Problemas Comunes
 
@@ -567,19 +482,6 @@ fecha = obtener_fecha_actual_colombia()
 fecha = datetime.now()  # Esto usa UTC
 ```
 
-### Problema 6: "El programador de despertar no funciona"
-
-**Síntomas**: El log muestra errores o no se ejecuta
-
-**Soluciones**:
-
-1. ✅ Verifica que Chrome esté instalado
-2. ✅ Revisa el archivo `app_wake_up.log` para ver errores específicos
-3. ✅ Verifica que la URL de la app sea accesible
-4. ✅ Ejecuta manualmente para ver el error:
-   ```bash
-   python Scraper/app_wake_up_scheduler.py
-   ```
 
 ## 📊 Rendimiento y Optimización
 
@@ -605,26 +507,6 @@ Observa los logs en la consola:
 📊 Datos en caché | Total solicitudes: 250 | Actualizado: 10:30:15 | Cache TTL: 300s
 ⚠️ Large dataset detected (1500 records), optimizing memory usage
 ```
-
-## 🔐 Seguridad
-
-### Mejores Prácticas
-
-1. **Credenciales**:
-   - ✅ NUNCA compartas `secrets.toml`
-   - ✅ NUNCA comitees `secrets.toml` a Git (ya está en `.gitignore`)
-   - ✅ Usa contraseñas fuertes (mínimo 12 caracteres)
-   - ✅ Cambia contraseñas cada 3-6 meses
-
-2. **Acceso**:
-   - ✅ Cada administrador solo ve solicitudes de su departamento
-   - ✅ No compartas credenciales de administrador
-   - ✅ Cierra sesión al terminar
-
-3. **Datos**:
-   - ✅ Los comentarios de usuario se sanitizan automáticamente (prevención XSS)
-   - ✅ Las conexiones a SharePoint usan OAuth2
-   - ✅ Los correos se envían de forma segura con TLS
 
 ### Permisos Azure AD
 
@@ -712,8 +594,6 @@ def obtener_solicitudes_por_estado(estado: str) -> pd.DataFrame:
 ### Documentación Interna
 
 - **`Docs/CLAUDE.md`**: Documentación técnica completa para desarrolladores
-- **`Scraper/QUICK_START.md`**: Guía rápida del programador de despertar
-- **`Scraper/SCHEDULER_SUMMARY.md`**: Detalles técnicos del programador
 
 ### Documentación Externa
 
@@ -722,30 +602,6 @@ def obtener_solicitudes_por_estado(estado: str) -> pd.DataFrame:
 - **SharePoint REST API**: https://docs.microsoft.com/en-us/sharepoint/dev/sp-add-ins/
 - **Pandas**: https://pandas.pydata.org/docs/
 - **Plotly**: https://plotly.com/python/
-
-## 📞 Soporte y Contacto
-
-### Soporte Técnico
-
-Para problemas técnicos:
-
-1. 📖 Consulta la sección "Resolución de Problemas" de este README
-2. 📚 Revisa la documentación en `Docs/CLAUDE.md`
-3. 🔍 Busca en los logs de la aplicación
-4. 📧 Contacta al equipo de desarrollo
-
-### Equipo de Desarrollo
-
-- **Proyecto**: Sistema de Gestión de Solicitudes - IGAC
-- **Versión**: 2.0
-- **Última actualización**: Diciembre 2024
-- **Mantenido por**: Equipo de Desarrollo IGAC
-
-## 📝 Licencia
-
-Este proyecto es propiedad del **Instituto Geográfico Agustín Codazzi (IGAC)**.
-
-© 2024 Instituto Geográfico Agustín Codazzi - Todos los derechos reservados
 
 ---
 
@@ -763,17 +619,10 @@ streamlit run Scripts/main_admin.py
 # 3. Abrir en navegador
 # http://localhost:8501
 
-# 4. Iniciar sesión con credenciales de departamento
+# 4. Iniciar sesión con credenciales de área/proceso
 
 # 5. Gestionar solicitudes
 ```
 
 ---
 
-**¿Primera vez usando este sistema?** 👆 Lee desde el principio
-
-**¿Ya configuraste todo?** 👆 Ve a "Inicio Rápido"
-
-**¿Tienes problemas?** 👆 Ve a "Resolución de Problemas"
-
-**¿Quieres contribuir?** 👆 Ve a "Contribuir al Proyecto"

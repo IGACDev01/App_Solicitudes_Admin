@@ -44,7 +44,7 @@ def calcular_tiempo_pausa_en_tiempo_real(df: pd.DataFrame) -> float:
 
 def calcular_incompletas_con_tiempo_real(df: pd.DataFrame) -> List[Dict[str, Any]]:
     """Calcular solicitudes incompletas con tiempo real de pausa"""
-    from timezone_utils_admin import convertir_a_colombia
+    from shared_timezone_utils import convertir_a_colombia
 
     df_incompletas = df[df['estado'] == 'Incompleta']
     incompletas_antiguas_data = []

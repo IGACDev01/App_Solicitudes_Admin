@@ -3,7 +3,7 @@ import time
 import pandas as pd
 from sharepoint_list_manager import GestorListasSharePoint
 from shared_timezone_utils import obtener_fecha_actual_colombia
-from shared_cache_utils import obtener_cache_key, invalidar_y_actualizar_cache, invalidar_cache_datos
+from shared_cache_utils import obtener_cache_key, invalidar_y_actualizar_cache, invalidar_cache_datos, periodic_maintenance
 
 st.set_option('client.showErrorDetails', False)
 st.set_option('client.toolbarMode', 'minimal')
@@ -60,16 +60,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-
-def invalidar_cache_datos():
-    """Invalidar cache de datos después de operaciones de escritura"""
-    try:
-        # Clear all Streamlit cache data
-        st.cache_data.clear()
-        print("✅ Cache de datos invalidado")
-    except Exception as e:
-        print(f"⚠️ Error invalidando cache: {e}")
-
 @st.cache_data(ttl=300, show_spinner=False, max_entries=3)
 def obtener_datos_sharepoint_en_cache(cache_key: str = "default"):
     """Obtener datos SharePoint con caché"""
@@ -114,79 +104,6 @@ def inicializar_estado_sesion():
         st.session_state.proceso_admin = None
     if 'usuario_admin' not in st.session_state:
         st.session_state.usuario_admin = None
-
-
-def cleanup_streamlit_cache():
-    """Clean up Streamlit cache periodically"""
-    try:
-        # Try to clear cache if it exists
-        # Note: get_stats() may not be available in all Streamlit versions
-        try:
-            cache_info = st.cache_data.get_stats()
-            total_entries = sum(len(entries) for entries in cache_info.values())
-
-            if total_entries > 20:  # If too many cached items
-                print(f"🧹 Cleaning cache: {total_entries} entries found")
-                st.cache_data.clear()
-                print("✅ Cache cleared")
-        except AttributeError:
-            # get_stats() not available, skip detailed cleanup
-            pass
-
-    except Exception as e:
-        print(f"⚠️ Cache cleanup error: {e}")
-
-
-def cleanup_old_session_data():
-    """Clean up old session state data"""
-    try:
-        keys_to_remove = []
-
-        # Clean up old form IDs (keep only recent ones)
-        for key in st.session_state.keys():
-            if key.startswith('old_form_ids') and len(st.session_state.get(key, [])) > 10:
-                # Keep only last 5 form IDs
-                st.session_state[key] = st.session_state[key][-5:]
-
-            # Remove temporary flags older than 1 hour
-            if key.startswith('temp_') or key.startswith('just_submitted_'):
-                keys_to_remove.append(key)
-
-        # Remove old temporary keys
-        for key in keys_to_remove:
-            try:
-                del st.session_state[key]
-            except:
-                pass
-
-        if keys_to_remove:
-            print(f"🧹 Cleaned up {len(keys_to_remove)} old session keys")
-
-    except Exception as e:
-        print(f"⚠️ Session cleanup error: {e}")
-
-
-def periodic_maintenance():
-    """Perform periodic maintenance tasks"""
-    # Only run maintenance occasionally
-    if 'last_maintenance' not in st.session_state:
-        st.session_state.last_maintenance = 0
-
-    current_time = time.time()
-
-    # Run maintenance every 30 minutes
-    if current_time - st.session_state.last_maintenance > 1800:  # 30 minutes
-        print("🔧 Running periodic maintenance...")
-
-        # Clean up old session state data
-        cleanup_old_session_data()
-
-        # Clean up cache if needed
-        cleanup_streamlit_cache()
-
-        # Update maintenance timestamp
-        st.session_state.last_maintenance = current_time
-        print("✅ Maintenance completed")
 
 def main():
     """Función principal de la aplicación"""

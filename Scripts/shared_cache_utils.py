@@ -1,6 +1,6 @@
 """
-Shared cache utilities for both Admin and User apps
-Consolidates cache management functions from both applications
+Utilidades de caché compartidas para la aplicación de administración
+Consolida funciones de gestión de caché
 """
 import time
 from typing import Optional
@@ -8,11 +8,9 @@ import streamlit as st
 
 
 def invalidar_cache_datos():
-    """Invalidate all Streamlit cache data
+    """Invalidar todos los datos de caché de Streamlit
 
-    Clears cached functions and data to force recalculation on next call.
-
-    Aliases: cleanup_streamlit_cache()
+    Limpia funciones y datos cacheados para forzar recalculación en la próxima llamada.
     """
     try:
         st.cache_data.clear()
@@ -21,25 +19,17 @@ def invalidar_cache_datos():
         print(f"⚠️ Error invalidando cache: {e}")
 
 
-# Alias for user app compatibility
-def cleanup_streamlit_cache():
-    """Cleanup Streamlit cache (alias for admin function)"""
-    invalidar_cache_datos()
-
-
 def forzar_actualizacion_cache() -> str:
-    """Force cache update by generating new cache key
+    """Forzar actualización de caché generando nueva clave de caché
 
-    Creates a unique cache key based on current timestamp to force
-    functions with cache_key parameter to recalculate.
+    Crea una clave de caché única basada en timestamp actual para forzar
+    funciones con parámetro cache_key a recalcular.
 
     Returns:
-        The new cache key string
-
-    Aliases: update_cache_key()
+        La nueva clave de caché
     """
     try:
-        # Generate unique cache key to force refresh
+        # Generar clave única para forzar refresh
         cache_key = f"refresh_{int(time.time())}"
         st.session_state['cache_key'] = cache_key
         print(f"✅ Cache key actualizada: {cache_key}")
@@ -49,41 +39,25 @@ def forzar_actualizacion_cache() -> str:
         return "default"
 
 
-# Alias for user app compatibility
-def update_cache_key() -> str:
-    """Update cache key (alias for admin function)"""
-    return forzar_actualizacion_cache()
-
-
 def obtener_cache_key() -> str:
-    """Get current cache key or return default
+    """Obtener clave de caché actual o retornar default
 
-    Retrieves the cache key from session state, used to bypass cached
-    functions by passing a different key.
+    Recupera la clave de caché del estado de sesión, usado para saltarse
+    funciones cacheadas pasando una clave diferente.
 
     Returns:
-        Current cache key or 'default'
-
-    Aliases: get_cache_key()
+        Clave de caché actual o 'default'
     """
     return st.session_state.get('cache_key', 'default')
 
 
-# Alias for user app compatibility
-def get_cache_key() -> str:
-    """Get current cache key (alias for admin function)"""
-    return obtener_cache_key()
-
-
 def invalidar_y_actualizar_cache() -> str:
-    """Combined function: invalidate cache and force update
+    """Función combinada: invalidar caché y forzar actualización
 
-    Performs both cache invalidation and key update for maximum cache refresh.
+    Realiza tanto invalidación de caché como actualización de clave para máximo refresh.
 
     Returns:
-        New cache key after update
-
-    Aliases: cleanup_and_update_cache()
+        Nueva clave de caché después de actualizar
     """
     try:
         invalidar_cache_datos()
@@ -93,12 +67,6 @@ def invalidar_y_actualizar_cache() -> str:
     except Exception as e:
         print(f"⚠️ Error en renovación completa de cache: {e}")
         return "default"
-
-
-# Alias for user app compatibility
-def cleanup_and_update_cache() -> str:
-    """Cleanup and update cache (alias for admin function)"""
-    return invalidar_y_actualizar_cache()
 
 
 def cleanup_old_session_data():
