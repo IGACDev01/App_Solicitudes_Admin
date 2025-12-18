@@ -1,14 +1,85 @@
+"""
+Gestor de Notificaciones por Email
+===================================
+
+Módulo encargado de enviar notificaciones por correo electrónico usando
+Microsoft Graph API para informar a solicitantes y responsables sobre
+cambios en el estado de solicitudes.
+
+Funcionalidades principales:
+- Envío de confirmación de nueva solicitud al solicitante
+- Notificación a responsables sobre nuevas asignaciones
+- Actualización de estado con archivos adjuntos
+- Notificaciones de cambios específicos (estado, prioridad, comentarios)
+- Autenticación OAuth2 con Microsoft Graph API
+- Plantillas HTML personalizadas para cada tipo de notificación
+
+Tipos de notificaciones:
+1. Nueva solicitud → Responsables + Solicitante (confirmación)
+2. Actualización de estado → Solicitante
+3. Cambios específicos → Solicitante
+4. Asignación de responsable → Responsable nuevo
+5. Actualización con archivo adjunto → Solicitante
+
+Configuración requerida (secrets.toml):
+- TENANT_ID: ID del tenant de Azure AD
+- CLIENT_ID: ID de la aplicación Azure AD
+- CLIENT_SECRET: Secret de la aplicación
+- SENDER_EMAIL: Email remitente (debe tener permisos Mail.Send)
+
+Modo simulación:
+    Si las credenciales no están configuradas, el gestor opera en modo
+    simulación donde registra las notificaciones en consola sin enviarlas.
+
+Autor: Equipo IGAC
+Fecha: 2024-2025
+"""
+
 import requests
 from typing import Dict, Any, Optional
 import os
 import streamlit as st
 from shared_timezone_utils import obtener_fecha_actual_colombia, formatear_fecha_colombia
 
+# URL de la aplicación de seguimiento para solicitantes
 URL_APLICACION = "https://igac-requests-control-panel.streamlit.app/"
 
+
 class GestorNotificacionesEmail:
+    """
+    Gestor de notificaciones por email usando Microsoft Graph API
+
+    Maneja todo el envío de correos electrónicos del sistema, incluyendo
+    autenticación OAuth2, generación de plantillas HTML, y envío mediante
+    Microsoft Graph API.
+
+    Attributes:
+        tenant_id (str): ID del tenant de Azure AD
+        client_id (str): ID de la aplicación en Azure AD
+        client_secret (str): Secret de la aplicación
+        email_remitente (str): Email del remitente configurado
+        email_habilitado (bool): Si el servicio está configurado correctamente
+        token_acceso (str): Token OAuth2 actual (cacheado)
+
+    Modo de operación:
+        - Producción: Envía emails reales si email_habilitado=True
+        - Simulación: Registra en consola si email_habilitado=False
+    """
+
     def __init__(self):
-        """Inicializa el gestor de notificaciones por email"""
+        """
+        Inicializar gestor de notificaciones por email
+
+        Carga credenciales desde st.secrets y valida que la configuración
+        esté completa. Si falta alguna credencial, opera en modo simulación.
+
+        Raises:
+            No lanza excepciones. Si hay error, opera en modo simulación.
+
+        Nota:
+            El token de acceso se obtiene bajo demanda (lazy loading) en
+            la primera llamada a envío de email.
+        """
         # Configuración de Microsoft Graph API desde Streamlit secrets
         self.tenant_id = st.secrets["TENANT_ID"]
         self.client_id = st.secrets["CLIENT_ID"]
@@ -59,7 +130,22 @@ class GestorNotificacionesEmail:
             return None
 
     def obtener_responsables_email(self, area: str, proceso: str, tipo_solicitud: str) -> list:
-        """Obtiene emails de responsables basado en área y proceso"""
+        """
+        Obtener emails de responsables según área y proceso
+
+        Args:
+            area (str): Área de la solicitud
+            proceso (str): Proceso específico dentro del área
+            tipo_solicitud (str): Tipo de solicitud (no usado actualmente)
+
+        Returns:
+            list: Lista de emails de responsables. Si no hay responsables
+                 específicos, retorna email del coordinador por defecto.
+
+        Nota:
+            El mapeo de responsables está hardcodeado en esta función.
+            Los emails de prueba tienen prefijo "TEST" para desarrollo.
+        """
         # Mapeo de emails basado en área y proceso
         mapeo_responsables = {
             "Subdirección Administrativa y Financiera": {
@@ -93,7 +179,32 @@ class GestorNotificacionesEmail:
         return responsables
     
     def enviar_notificacion_nueva_solicitud(self, datos_solicitud: Dict[str, Any], id_solicitud: str) -> bool:
-        """Envía notificación de nueva solicitud a responsables y confirmación al solicitante"""
+        """
+        Enviar notificación de nueva solicitud a responsables y confirmación al solicitante
+
+        Envía dos tipos de emails:
+        1. A responsables del área/proceso: Notificación de nueva solicitud asignada
+        2. Al solicitante: Confirmación de recepción con ID de seguimiento
+
+        Args:
+            datos_solicitud (Dict[str, Any]): Datos de la solicitud. Campos requeridos:
+                                             - 'area': Área de la solicitud
+                                             - 'proceso': Proceso específico
+                                             - 'tipo': Tipo de solicitud
+                                             - 'email': Email del solicitante
+                                             - 'nombre': Nombre del solicitante
+                                             - 'territorial': Territorial del solicitante
+                                             - 'descripcion': Descripción de la solicitud
+            id_solicitud (str): ID único de la solicitud
+
+        Returns:
+            bool: True si al menos un email se envió exitosamente, False si todos fallaron
+
+        Nota:
+            - En modo simulación (email_habilitado=False), solo registra en consola
+            - Si falla token OAuth2, no se envían emails
+            - Cada email se intenta individualmente (un fallo no detiene los demás)
+        """
         if not self.email_habilitado:
             print(f"Notificaciones de email para solicitud {id_solicitud}")
             print(f"- Área: {datos_solicitud['area']}")

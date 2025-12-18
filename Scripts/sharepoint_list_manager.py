@@ -1,3 +1,36 @@
+"""
+Gestor de Listas SharePoint - Integración con Microsoft Graph API
+===================================================================
+
+Módulo principal para gestionar la comunicación con SharePoint Online mediante
+Microsoft Graph API. Proporciona funcionalidad completa de CRUD (Crear, Leer,
+Actualizar, Eliminar) para solicitudes almacenadas en listas de SharePoint.
+
+Características principales:
+- Autenticación OAuth2 con Microsoft Graph API (flujo client credentials)
+- Caché de tokens de acceso para optimizar rendimiento
+- Lógica de reintentos con backoff exponencial para manejo de errores
+- Gestión de zona horaria (Colombia/UTC) para almacenamiento consistente
+- Subida y gestión de archivos adjuntos en SharePoint Document Libraries
+- Tracking de historial de estados y pausas de solicitudes
+- Manejo de errores HTTP específicos (429 rate limiting, 503 server errors, etc.)
+
+Flujo de autenticación:
+1. Obtener token de acceso usando tenant_id, client_id, client_secret
+2. Cachear token con TTL de 55 minutos (5 minutos antes de expiración)
+3. Usar token para todas las peticiones subsecuentes a Graph API
+4. Renovar automáticamente cuando expira
+
+Estructura de datos:
+- Lista SharePoint: "Data App Solicitudes"
+- Campos principales: IDSolicitud, Estado, Proceso, Área, etc.
+- Almacenamiento de fechas: SIEMPRE en UTC
+- Visualización de fechas: SIEMPRE en hora Colombia (COT)
+
+Autor: Equipo IGAC
+Fecha: 2024-2025
+"""
+
 import pandas as pd
 import os
 import streamlit as st
@@ -10,28 +43,67 @@ from typing import Dict, Any, Optional, List
 from urllib.parse import quote
 from shared_timezone_utils import obtener_fecha_actual_colombia, convertir_a_colombia, convertir_a_utc_para_almacenamiento
 
+
 class GestorListasSharePoint:
+    """
+    Gestor principal para interactuar con listas de SharePoint mediante Microsoft Graph API
+
+    Esta clase encapsula toda la lógica de comunicación con SharePoint Online,
+    incluyendo autenticación, operaciones CRUD, y gestión de archivos adjuntos.
+
+    Attributes:
+        nombre_lista (str): Nombre de la lista SharePoint a gestionar
+        df (pd.DataFrame): DataFrame con datos de solicitudes cargados desde SharePoint
+        configuracion_graph (dict): Credenciales y URLs de Graph API
+        token_acceso (str): Token OAuth2 actual (cacheado)
+        token_expira_en (datetime): Timestamp de expiración del token
+        id_sitio_sharepoint (str): ID único del sitio SharePoint
+        id_lista (str): ID único de la lista SharePoint
+        id_drive_destino (str): ID del drive para almacenar archivos adjuntos
+    """
+
     def __init__(self, nombre_lista: str = "Data App Solicitudes"):
-        """Inicializar Gestor de Listas SharePoint"""
+        """
+        Inicializar gestor de listas SharePoint con autenticación y validación
+
+        Este constructor realiza las siguientes operaciones:
+        1. Cargar credenciales desde st.secrets
+        2. Validar que existan todos los campos requeridos
+        3. Obtener token de acceso OAuth2
+        4. Conectar con el sitio SharePoint especificado
+        5. Obtener ID de la lista por nombre
+        6. Inicializar DataFrame vacío para carga bajo demanda
+
+        Args:
+            nombre_lista (str): Nombre de la lista SharePoint.
+                               Por defecto "Data App Solicitudes"
+
+        Raises:
+            st.stop(): Si falla la validación de configuración o la conexión inicial
+
+        Nota:
+            El DataFrame (self.df) se inicializa vacío y se carga bajo demanda
+            llamando a cargar_datos() para optimizar el tiempo de inicialización.
+        """
         self.nombre_lista = nombre_lista
         self.df = None
-        
-        # Configuración SharePoint/Graph API
+
+        # Configuración de Microsoft Graph API y SharePoint
         self.configuracion_graph = self._cargar_configuracion_graph()
         self.token_acceso = None
         self.token_expira_en = None
-        
-        # Información de conexión SharePoint
+
+        # Información de conexión SharePoint (IDs se obtienen durante inicialización)
         self.id_sitio_sharepoint = None
         self.id_lista = None
         self.id_drive_destino = None
-        
-        # Validar configuración
+
+        # Validar que existan todas las credenciales requeridas
         if not self._validar_configuracion_sharepoint():
-            st.error("❌ Configuración de SharePoint incompleta. Verifique sus variables de entorno.")
+            st.error("❌ Configuración de SharePoint incompleta. Verifique .streamlit/secrets.toml")
             st.stop()
-        
-        # Inicializar conexión
+
+        # Establecer conexión con SharePoint y obtener IDs necesarios
         self._inicializar_conexion_sharepoint()
     
     def _validar_configuracion_sharepoint(self) -> bool:
@@ -56,16 +128,34 @@ class GestorListasSharePoint:
         }
     
     def _obtener_token_acceso(self) -> Optional[str]:
-        """Obtener token de acceso para Microsoft Graph API con retry logic"""
-        
-        # Check if we have a valid cached token
-        if (hasattr(self, '_token_cache') and hasattr(self, '_token_expira_en') and 
+        """
+        Obtener token de acceso OAuth2 para Microsoft Graph API con lógica de reintentos
+
+        Implementa un sistema robusto de autenticación con las siguientes características:
+        1. Cachea el token si está vigente (ahorra llamadas a Azure AD)
+        2. Usa flujo OAuth2 client_credentials para autenticación de servicio
+        3. Reintenta hasta 3 veces con backoff exponencial en caso de error
+        4. Maneja específicamente códigos HTTP 429 (rate limiting) y 503 (server error)
+        5. Guarda 5 minutos de margen antes de la expiración del token
+
+        Returns:
+            str: Token de acceso válido si la autenticación es exitosa
+            None: Si falla la autenticación después de todos los reintentos
+
+        Nota:
+            - El token se cachea con TTL de 55 minutos (5 min antes de expiración)
+            - Errores 400/401 (config/auth inválido) NO se reintentan
+            - Errores 429/503/504 (temporales) SÍ se reintentan con backoff
+        """
+
+        # Verificar si ya tenemos un token válido en caché
+        if (hasattr(self, '_token_cache') and hasattr(self, '_token_expira_en') and
             datetime.now() < self._token_expira_en):
             return self._token_cache
-        
-        # Retry configuration
-        max_retries = 3
-        base_delay = 1  # seconds
+
+        # Configuración de reintentos con backoff exponencial
+        max_retries = 3       # Máximo de intentos
+        base_delay = 1        # Delay base en segundos (se duplica cada reintento)
         
         for attempt in range(max_retries):
             try:
@@ -79,42 +169,50 @@ class GestorListasSharePoint:
                 }
                 
                 headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-                
-                # Add timeout to prevent hanging
+
+                # Timeout de 30 segundos para prevenir peticiones colgadas
                 response = requests.post(url_token, data=datos_token, headers=headers, timeout=30)
-                
+
                 if response.status_code == 200:
+                    # Autenticación exitosa - extraer y cachear token
                     info_token = response.json()
                     token_acceso = info_token.get('access_token')
-                    expira_en = info_token.get('expires_in', 3600)
-                    
+                    expira_en = info_token.get('expires_in', 3600)  # Por defecto 1 hora
+
+                    # Cachear token con margen de 5 minutos antes de expiración
                     self._token_cache = token_acceso
                     self._token_expira_en = datetime.now() + timedelta(seconds=expira_en - 300)
-                    
+
                     print(f"✅ Token de SharePoint obtenido exitosamente (intento {attempt + 1})")
                     return token_acceso
-                
+
                 else:
-                    # Handle specific error codes
+                    # Manejo específico según código de error HTTP
                     if response.status_code == 400:
-                        print("❌ Error de configuración OAuth - verifique credenciales")
-                        return None  # Don't retry for config errors
+                        # Error de configuración - NO reintentar (problema con credenciales)
+                        print("❌ Error de configuración OAuth - verifique credenciales en secrets.toml")
+                        return None
+
                     elif response.status_code == 401:
-                        print("❌ Credenciales inválidas")
-                        return None  # Don't retry for auth errors
+                        # Credenciales inválidas - NO reintentar (problema de autenticación)
+                        print("❌ Credenciales inválidas - verifique tenant_id, client_id, client_secret")
+                        return None
+
                     elif response.status_code in [429, 503, 504]:
-                        # Rate limiting or server errors - retry with backoff
+                        # Rate limiting o errores de servidor - SÍ reintentar con backoff exponencial
                         delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
                         print(f"⚠️ Error temporal ({response.status_code}), reintentando en {delay:.1f}s...")
                         if attempt < max_retries - 1:
                             time.sleep(delay)
                             continue
+
                     else:
+                        # Error desconocido - intentar extraer descripción y reintentar
                         info_error = response.json() if response.headers.get('content-type', '').startswith('application/json') else {}
                         error_desc = info_error.get('error_description', f'HTTP {response.status_code}')
                         print(f"❌ Error en autenticación SharePoint: {error_desc}")
-                        
-                        # Retry for unknown errors
+
+                        # Reintentar para errores desconocidos
                         if attempt < max_retries - 1:
                             delay = base_delay * (2 ** attempt)
                             print(f"🔄 Reintentando en {delay}s...")
@@ -122,27 +220,30 @@ class GestorListasSharePoint:
                             continue
                     
             except requests.exceptions.Timeout:
+                # Timeout de red - reintentar
                 print(f"⏱️ Timeout en autenticación (intento {attempt + 1})")
                 if attempt < max_retries - 1:
                     delay = base_delay * (2 ** attempt)
                     time.sleep(delay)
                     continue
-                    
+
             except requests.exceptions.ConnectionError:
+                # Error de conectividad - reintentar
                 print(f"🌐 Error de conexión (intento {attempt + 1})")
                 if attempt < max_retries - 1:
                     delay = base_delay * (2 ** attempt)
                     time.sleep(delay)
                     continue
-                    
+
             except Exception as e:
+                # Error inesperado - reintentar
                 print(f"❌ Error inesperado en autenticación: {e}")
                 if attempt < max_retries - 1:
                     delay = base_delay * (2 ** attempt)
                     time.sleep(delay)
                     continue
-        
-        # All retries failed
+
+        # Todos los reintentos fallaron - retornar None
         print(f"❌ Falló autenticación SharePoint después de {max_retries} intentos")
         return None
 
@@ -785,14 +886,33 @@ class GestorListasSharePoint:
     # ============================================
     
     def crear_dataframe_vacio(self) -> pd.DataFrame:
-        """Crear DataFrame vacío con estructura apropiada"""
+        """
+        Crear DataFrame vacío con estructura completa de columnas
+
+        Returns:
+            pd.DataFrame: DataFrame vacío con todas las columnas de solicitud definidas
+
+        Nota:
+            Esta estructura debe coincidir exactamente con los campos de la lista SharePoint.
+            Incluye campos de tracking temporal, historial, y comentarios bidireccionales.
+        """
         return pd.DataFrame(columns=[
+            # Identificación básica
             'id_solicitud', 'territorial', 'nombre_solicitante', 'email_solicitante',
-            'fecha_solicitud', 'tipo_solicitud', 'area', 'proceso', 'prioridad',
-            'descripcion', 'estado', 'responsable_asignado', 'email_responsable', 'fecha_actualizacion',
-            'fecha_completado', 'comentarios_admin', 'comentarios_usuario',  # NEW FIELD
-            'tiempo_respuesta_dias', 'tiempo_resolucion_dias', 'sharepoint_id',
-            'tiempo_pausado_dias', 'fecha_pausa', 'historial_pausas', 'historial_estados'
+            # Información de la solicitud
+            'fecha_solicitud', 'tipo_solicitud', 'area', 'proceso', 'prioridad', 'descripcion',
+            # Estado y asignación
+            'estado', 'responsable_asignado', 'email_responsable',
+            # Fechas de gestión
+            'fecha_actualizacion', 'fecha_completado',
+            # Comentarios bidireccionales (admin y usuario)
+            'comentarios_admin', 'comentarios_usuario',
+            # Métricas temporales
+            'tiempo_respuesta_dias', 'tiempo_resolucion_dias', 'tiempo_pausado_dias',
+            # Campos de pausa y tracking
+            'fecha_pausa', 'historial_pausas', 'historial_estados',
+            # ID interno SharePoint
+            'sharepoint_id'
         ])
     
     def obtener_todas_solicitudes(self) -> pd.DataFrame:

@@ -1,3 +1,46 @@
+"""
+Administración de Solicitudes - Interfaz Principal
+===================================================
+
+Módulo principal de la interfaz de administración de solicitudes. Proporciona
+UI completa para que administradores gestionen solicitudes: autenticación,
+filtrado, edición, cambios de estado, comentarios, y gestión de archivos adjuntos.
+
+Funcionalidades principales:
+- Autenticación por área y proceso (13 procesos diferentes)
+- Visualización de solicitudes con filtros múltiples (estado, proceso, búsqueda, fechas)
+- Edición en línea de campos de solicitud
+- Gestión de transiciones de estado con validación
+- Comentarios bidireccionales (admin ↔ usuario)
+- Subida y gestión de archivos adjuntos a SharePoint
+- Exportación de datos filtrados a Excel
+- Notificaciones automáticas por email
+- Vista de historial completo de cambios
+
+Secciones de la interfaz:
+1. Login: Autenticación por usuario/contraseña según área y proceso
+2. Vista principal: Tabla de solicitudes con filtros
+3. Edición: Modal para editar campos de solicitud individual
+4. Exportación: Generación de archivos Excel con datos filtrados
+
+Flujo de autenticación:
+    Usuario → Selecciona Área → Selecciona Proceso → Ingresa credenciales →
+    Sistema valida → Acceso concedido solo para su área/proceso
+
+Control de acceso:
+    Cada administrador solo puede ver y editar solicitudes de su área/proceso.
+    Las credenciales se almacenan en .streamlit/secrets.toml.
+
+Integración con otros módulos:
+- email_manager: Envío de notificaciones
+- state_flow_manager: Validación de transiciones de estado
+- sharepoint_list_manager: CRUD en SharePoint
+- shared_*: Utilidades de filtrado, HTML, timezone, cache
+
+Autor: Equipo IGAC
+Fecha: 2024-2025
+"""
+
 import streamlit as st
 import pandas as pd
 from email_manager import GestorNotificacionesEmail
@@ -13,7 +56,10 @@ from datetime import datetime, timedelta
 import io
 import xlsxwriter
 
-# Cargar credenciales desde Streamlit secrets
+
+# ============================================================================
+# GESTIÓN DE CREDENCIALES
+# ============================================================================
 def cargar_credenciales_administradores():
     """Cargar credenciales desde Streamlit secrets o fallback a diccionario por defecto"""
     try:

@@ -1,3 +1,35 @@
+"""
+Dashboard de Análisis y Reportes
+=================================
+
+Módulo que proporciona visualizaciones interactivas y métricas del estado
+de las solicitudes usando Plotly y Streamlit. Incluye gráficos, tablas,
+y métricas calculadas en tiempo real.
+
+Funcionalidades principales:
+- Métricas generales (total, por estado, promedios)
+- Gráficos de distribución (estados, tipos, procesos, territoriales)
+- Análisis temporal (evolución de solicitudes, tendencias)
+- Tablas detalladas con filtros
+- Exportación de datos a Excel
+- Cálculos en tiempo real de pausas y tiempos de respuesta
+
+Secciones del dashboard:
+1. Vista general: Métricas principales y resumen
+2. Distribuciones: Gráficos por estado, tipo, proceso, territorial
+3. Análisis temporal: Evolución a lo largo del tiempo
+4. Alertas: Solicitudes con pausas largas o vencidas
+5. Tablas detalladas: Datos completos con filtros
+
+Tecnologías:
+- Streamlit: Framework de UI
+- Plotly: Gráficos interactivos
+- Pandas: Manipulación de datos
+
+Autor: Equipo IGAC
+Fecha: 2024-2025
+"""
+
 import streamlit as st
 from datetime import timedelta
 import pandas as pd
@@ -8,13 +40,26 @@ from shared_timezone_utils import obtener_fecha_actual_colombia, convertir_a_col
 
 
 def calcular_resumen_dataframe(df: pd.DataFrame) -> dict:
-    """Calculate summary from DataFrame without modifying state
+    """
+    Calcular resumen estadístico del DataFrame sin modificar estado de sesión
+
+    Genera un diccionario con estadísticas agregadas de solicitudes por estado
+    y tipo. Formato compatible con funciones de gráficos del dashboard.
 
     Args:
-        df: DataFrame to calculate summary from
+        df (pd.DataFrame): DataFrame con solicitudes a resumir
 
     Returns:
-        Dictionary with summary statistics in the format expected by chart functions
+        dict: Diccionario con claves:
+             - 'total': Total de solicitudes
+             - 'asignada', 'en_proceso', 'incompleta', 'completada', 'cancelada': Conteos por estado
+             - 'solicitudes_por_estado': Dict con value_counts de estados
+             - 'solicitudes_por_tipo': Dict con value_counts de tipos
+
+    Nota:
+        - Maneja DataFrames vacíos o sin columnas requeridas
+        - Retorna diccionario con valores en 0 si hay error
+        - No modifica st.session_state (función pura)
     """
     try:
         # Generar distribuciones por estado y tipo
