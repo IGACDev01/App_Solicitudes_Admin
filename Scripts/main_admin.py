@@ -19,9 +19,18 @@ Fecha: 2024-2025
 
 import streamlit as st
 import time
+import os
 import pandas as pd
-from sharepoint_list_manager import GestorListasSharePoint
 from shared_timezone_utils import obtener_fecha_actual_colombia
+
+# Toggle entre modo MOCK (local JSON) y modo real (SharePoint)
+USE_MOCK = os.environ.get("USE_MOCK", "true").lower() == "true"
+
+if USE_MOCK:
+    from mock_gestor_sharepoint import MockGestorListasSharePoint as GestorListasSharePoint
+    print("*** MOCK MODE ACTIVE -- Using local JSON data instead of SharePoint ***")
+else:
+    from sharepoint_list_manager import GestorListasSharePoint
 from shared_cache_utils import obtener_cache_key, invalidar_y_actualizar_cache, invalidar_cache_datos, periodic_maintenance
 
 # Configuración de opciones de Streamlit para UI limpia
@@ -247,6 +256,10 @@ def main():
         with col2:
             st.image("Theme/Logo IGAC.png", width=100)
 
+        # Indicador visual de modo MOCK
+        if USE_MOCK:
+            st.warning("MODO MOCK ACTIVO -- Usando datos locales (JSON). Para usar SharePoint, establezca USE_MOCK=false")
+
         # 4. Obtener gestor de datos (singleton en caché de recursos)
         gestor_datos = obtener_gestor_datos()
 
@@ -302,7 +315,7 @@ def main():
         # 11. Footer institucional fijo en la parte inferior
         st.markdown("""
         <div class="footer">
-            © 2025 Instituto Geográfico Agustín Codazzi (IGAC) - Todos los derechos reservados |
+            © 2026 Instituto Geográfico Agustín Codazzi (IGAC) - Todos los derechos reservados |
             Sistema de Gestión de Solicitudes v2.0
         </div>
         """, unsafe_allow_html=True)

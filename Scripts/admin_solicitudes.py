@@ -43,6 +43,7 @@ Fecha: 2024-2025
 
 import streamlit as st
 import pandas as pd
+import os
 from email_manager import GestorNotificacionesEmail
 from shared_timezone_utils import obtener_fecha_actual_colombia, convertir_a_colombia, formatear_fecha_colombia
 from shared_html_utils import limpiar_contenido_html, formatear_comentarios_administrador_para_mostrar
@@ -55,6 +56,8 @@ import time
 from datetime import datetime, timedelta
 import io
 import xlsxwriter
+
+USE_MOCK = os.environ.get("USE_MOCK", "true").lower() == "true"
 
 
 # ============================================================================
@@ -121,8 +124,36 @@ def cargar_credenciales_administradores():
         st.error("Verifique que el archivo .streamlit/secrets.toml existe y tiene las credenciales configuradas")
         st.stop()
 
+def _obtener_credenciales_mock():
+    """Credenciales de prueba para modo MOCK (admin@test.com / test123)"""
+    mock_cred = {'usuario': 'admin@test.com', 'password': 'test123'}
+    creds = {
+        "Subdirección Administrativa y Financiera": {
+            "Almacén": mock_cred.copy(),
+            "Archivo": mock_cred.copy(),
+            "Contabilidad": mock_cred.copy(),
+            "Contractual": mock_cred.copy(),
+            "Correspondencia": mock_cred.copy(),
+            "Infraestructura": mock_cred.copy(),
+            "Operación Logística SAF": mock_cred.copy(),
+            "Presupuesto": mock_cred.copy(),
+            "Tesorería": mock_cred.copy(),
+            "Tiquetes": mock_cred.copy(),
+            "Transporte": mock_cred.copy(),
+        },
+        "Oficina Asesora de Comunicaciones": {
+            "Comunicación Externa": mock_cred.copy(),
+            "Comunicación Interna": mock_cred.copy(),
+        }
+    }
+    print("*** MOCK MODE: Using test credentials (admin@test.com / test123) ***")
+    return creds
+
 # Cargar credenciales al iniciar
-CREDENCIALES_ADMINISTRADORES = cargar_credenciales_administradores()
+if USE_MOCK:
+    CREDENCIALES_ADMINISTRADORES = _obtener_credenciales_mock()
+else:
+    CREDENCIALES_ADMINISTRADORES = cargar_credenciales_administradores()
 
 # Configuración de persistencia
 TIEMPO_PERSISTENCIA_EXPANDER = 300  # 5 minutos en segundos
@@ -1360,47 +1391,59 @@ def procesar_actualizacion_sharepoint_simplificada(gestor_datos, solicitud, nuev
 
         # Paso 5: Enviar notificaciones al solicitante solo si se solicita y ocurrieron cambios
         email_enviado = False
+        email_responsable_enviado = False
         if notificar_solicitante and cambios:
-            try:
-                gestor_email = GestorNotificacionesEmail()
+            if USE_MOCK:
+                print(f"[MOCK] Email notification would be sent to {solicitud['email_solicitante']}")
+                print(f"[MOCK] Changes: {cambios}")
+                email_enviado = True
+            else:
+                try:
+                    gestor_email = GestorNotificacionesEmail()
 
-                datos_solicitud = {
-                    'id_solicitud': solicitud['id_solicitud'],
-                    'tipo_solicitud': solicitud['tipo_solicitud'],
-                    'email_solicitante': solicitud['email_solicitante'],
-                    'fecha_solicitud': solicitud.get('fecha_solicitud'),
-                    'area': solicitud.get('area', 'N/A'),
-                    'proceso': solicitud.get('proceso', 'N/A')
-                }
+                    datos_solicitud = {
+                        'id_solicitud': solicitud['id_solicitud'],
+                        'tipo_solicitud': solicitud['tipo_solicitud'],
+                        'email_solicitante': solicitud['email_solicitante'],
+                        'fecha_solicitud': solicitud.get('fecha_solicitud'),
+                        'area': solicitud.get('area', 'N/A'),
+                        'proceso': solicitud.get('proceso', 'N/A')
+                    }
 
-                # Enviar notificación sin adjuntos
-                email_enviado = gestor_email.enviar_notificacion_actualizacion_solo_cambios(
-                    datos_solicitud, cambios, responsable, email_responsable
-                )
+                    # Enviar notificación sin adjuntos
+                    email_enviado = gestor_email.enviar_notificacion_actualizacion_solo_cambios(
+                        datos_solicitud, cambios, responsable, email_responsable
+                    )
 
-            except Exception as e:
-                print(f"Error en notificación por email: {e}")
+                except Exception as e:
+                    print(f"Error en notificación por email: {e}")
 
         # Paso 5b: Notificación opcional al responsable
-        email_responsable_enviado = False
         if notificar_responsable and email_responsable and email_responsable.strip() and cambios:
-            try:
-                datos_responsable = {
-                    'id_solicitud': solicitud['id_solicitud'],
-                    'tipo_solicitud': solicitud['tipo_solicitud'],
-                    'email_solicitante': solicitud['email_solicitante'],
-                    'nombre_solicitante': solicitud['nombre_solicitante'],
-                    'fecha_solicitud': solicitud.get('fecha_solicitud'),
-                    'area': solicitud.get('area', 'N/A'),
-                    'proceso': solicitud.get('proceso', 'N/A')
-                }
+            if USE_MOCK:
+                print(f"[MOCK] Responsable notification would be sent to {email_responsable}")
+                email_responsable_enviado = True
+            else:
+                try:
+                    if 'gestor_email' not in dir():
+                        gestor_email = GestorNotificacionesEmail()
 
-                email_responsable_enviado = gestor_email.enviar_notificacion_responsable(
-                    datos_responsable, cambios, responsable, email_responsable
-                )
+                    datos_responsable = {
+                        'id_solicitud': solicitud['id_solicitud'],
+                        'tipo_solicitud': solicitud['tipo_solicitud'],
+                        'email_solicitante': solicitud['email_solicitante'],
+                        'nombre_solicitante': solicitud['nombre_solicitante'],
+                        'fecha_solicitud': solicitud.get('fecha_solicitud'),
+                        'area': solicitud.get('area', 'N/A'),
+                        'proceso': solicitud.get('proceso', 'N/A')
+                    }
 
-            except Exception as e:
-                print(f"Error en notificación de responsable: {e}")
+                    email_responsable_enviado = gestor_email.enviar_notificacion_responsable(
+                        datos_responsable, cambios, responsable, email_responsable
+                    )
+
+                except Exception as e:
+                    print(f"Error en notificación de responsable: {e}")
 
         # Paso 6: Recargar datos y mostrar éxito
         gestor_datos.cargar_datos(forzar_recarga=True)
